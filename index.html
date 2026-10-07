@@ -1,0 +1,722 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#2f5d50">
+<style>body{margin:0}[hidden]{display:none!important}img{max-width:100%}</style>
+</head>
+<body>
+<title>웹툰 알림판</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap">
+<style>
+/* Layout: one narrow column — platform tabs, day/status chips, a grid of square buttons, add + backup at the bottom */
+:root{
+  --bg:#f3f4f1; --surface:#ffffff; --surface-2:#e9ebe5; --fg:#1d211c; --muted:#646b62; --line:#d6d9d1;
+  --accent:#2f5d50; --accent-fg:#ffffff; --danger:#b3261e;
+  --naver:#03a94f; --naver-on:#ffffff; --naver-soft:#dcf5e6; --naver-ink:#0d4a2a;
+  --series:#1f6fb2; --series-on:#ffffff; --series-soft:#dceafa; --series-ink:#0f3557;
+  --kakao:#e0ad00; --kakao-on:#1d1600; --kakao-soft:#fff1bd; --kakao-ink:#4d3b00;
+  --f-display:"Do Hyeon","IBM Plex Sans KR",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#141714; --surface:#1d211d; --surface-2:#272c27; --fg:#e9ece6; --muted:#9aa296; --line:#343a33;
+  --accent:#7fc4ae; --accent-fg:#0f1a16; --danger:#ff8a80;
+  --naver:#3ddc84; --naver-on:#08210f; --naver-soft:#173825; --naver-ink:#c9f5db;
+  --series:#7db8ff; --series-on:#0a1d33; --series-soft:#17293d; --series-ink:#d3e6ff;
+  --kakao:#ffd23f; --kakao-on:#1d1600; --kakao-soft:#3a3214; --kakao-ink:#ffeeb0; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141714; --surface:#1d211d; --surface-2:#272c27; --fg:#e9ece6; --muted:#9aa296; --line:#343a33;
+  --accent:#7fc4ae; --accent-fg:#0f1a16; --danger:#ff8a80;
+  --naver:#3ddc84; --naver-on:#08210f; --naver-soft:#173825; --naver-ink:#c9f5db;
+  --series:#7db8ff; --series-on:#0a1d33; --series-soft:#17293d; --series-ink:#d3e6ff;
+  --kakao:#ffd23f; --kakao-on:#1d1600; --kakao-soft:#3a3214; --kakao-ink:#ffeeb0; color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font-family:var(--f-body);font-size:15px;line-height:1.5}
+.wrap{max-width:560px;margin:0 auto;padding-inline:16px;padding-block:20px 48px;display:flex;flex-direction:column;gap:16px}
+h1{font-family:var(--f-display);font-weight:400;font-size:2rem;margin:0;line-height:1.1}
+h2{font-family:var(--f-display);font-weight:400;font-size:1.3rem;margin:0}
+.head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+input{font:inherit;color:var(--fg);background:var(--surface);border:1.5px solid var(--line);border-radius:10px;padding:11px 12px}
+button{font:inherit;font-weight:500;border:1.5px solid var(--line);background:var(--surface);color:var(--fg);border-radius:10px;padding:10px 14px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;white-space:nowrap}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+button.ghost{background:transparent}
+button.danger{color:var(--danger);border-color:var(--danger);background:transparent}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.msg{font-size:.85rem;padding:10px 12px;border-radius:10px;background:var(--surface-2)}
+.msg.err{color:var(--danger)}
+
+/* platform tabs */
+.tabs{display:grid;grid-template-columns:repeat(3,1fr);background:var(--surface-2);border-radius:12px;padding:4px;gap:4px}
+.tabs button{border:0;background:transparent;border-radius:9px;padding:11px 0;font-family:var(--f-display);font-weight:400;font-size:1.1rem;color:var(--muted)}
+.tabs button[aria-selected="true"][data-p="naver"]{background:var(--naver);color:var(--naver-on)}
+.tabs button[aria-selected="true"][data-p="series"]{background:var(--series);color:var(--series-on)}
+.tabs button[aria-selected="true"][data-p="kakao"]{background:var(--kakao);color:var(--kakao-on)}
+
+/* day + status chips */
+.days{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.filter{grid-template-columns:repeat(7,1fr) 1.35fr 1.35fr}
+.days button{padding:8px 0;border-radius:999px;font-size:.92rem;min-width:0}
+.days button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.days button.today{font-weight:700}
+.filter button.st{border-style:dashed}
+.filter button.st:first-of-type{margin-left:4px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.seg button{padding:9px 0;border-radius:8px}
+.seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+
+/* square grid */
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.tile{width:100%;font-family:inherit;white-space:normal;cursor:pointer;aspect-ratio:1/1;max-width:100%;border-radius:14px;display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;text-decoration:none;font-weight:700;font-size:.95rem;line-height:1.3;overflow:hidden;word-break:keep-all;overflow-wrap:anywhere;border:1.5px solid transparent;position:relative}
+.tile.naver{background:var(--naver-soft);color:var(--naver-ink)}
+.tile.series{background:var(--series-soft);color:var(--series-ink)}
+.tile.kakao{background:var(--kakao-soft);color:var(--kakao-ink)}
+.tile.paused,.tile.done{background:var(--surface-2);color:var(--muted)}
+.tile .badge{position:absolute;top:6px;left:6px;font-size:.65rem;font-weight:700;padding:1px 6px;border-radius:5px;background:var(--fg);color:var(--bg)}
+.tile span{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.editing .tile{border-style:dashed;border-color:var(--muted)}
+.editing .tile::after{content:"수정";position:absolute;top:6px;right:8px;font-size:.65rem;font-weight:500;color:var(--muted)}
+@media (prefers-reduced-motion:no-preference){.tile{transition:transform .1s}.tile:active{transform:scale(.96)}}
+.empty{border:1.5px dashed var(--line);border-radius:14px;padding:20px;color:var(--muted);font-size:.9rem;text-align:center;grid-column:1/-1}
+
+/* add + backup */
+.add{display:flex;gap:8px}
+.add input{flex:1;min-width:0}
+.head-actions{display:flex;gap:8px;align-items:center}
+.icon-btn{width:44px;height:44px;padding:0;border-radius:12px}
+.icon-btn svg{width:22px;height:22px}
+.set-sec{display:flex;flex-direction:column;gap:10px;padding-top:14px;border-top:1px solid var(--line)}
+.set-sec h3{margin:0;font-size:.95rem}
+.gh-status{display:flex;align-items:center;gap:8px;font-size:.85rem}
+.gh-status i{width:9px;height:9px;border-radius:50%;background:var(--naver);flex:none}
+.gh-status.err{color:var(--danger)}
+.gh-status.err i{background:var(--danger)}
+.set-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+.row>*{flex:1}
+.set-sec textarea{width:100%;min-height:110px;font:inherit;font-size:.75rem;color:var(--fg);background:var(--surface);border:1.5px solid var(--line);border-radius:10px;padding:10px}
+.small{font-size:.8rem;color:var(--muted);margin:0}
+
+/* sheet */
+.sheet{position:fixed;inset:0;background:rgba(10,14,10,.45);display:flex;align-items:flex-end;justify-content:center;z-index:10}
+.sheet-in{background:var(--bg);width:100%;max-width:560px;max-height:92%;overflow:auto;border-radius:18px 18px 0 0;padding:20px 16px calc(20px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:14px}
+.field{display:flex;flex-direction:column;gap:6px}
+.field>label,.field>.lab{font-size:.8rem;font-weight:700;color:var(--muted)}
+.field input{width:100%}
+.ptag{font-size:.75rem;font-weight:700;padding:2px 8px;border-radius:6px;align-self:flex-start}
+.ptag.naver{background:var(--naver-soft);color:var(--naver-ink)}
+.ptag.series{background:var(--series-soft);color:var(--series-ink)}
+.ptag.kakao{background:var(--kakao-soft);color:var(--kakao-ink)}
+.controls{display:flex;flex-direction:column;gap:12px}
+
+/* 화면 크기별 배치 (CSS 기준 폭)
+   - 스마트폰 1440x3120 세로: 약 360~410px → 한 줄에 3개
+   - 스마트폰 가로 / 태블릿 2000x3200 세로: 약 800~1000px → 5~6개, 글자·버튼 크게
+   - 태블릿 가로(기기를 실제로 눕혔을 때만): 7개, 탭과 요일을 한 줄에
+   폭만 보면 태블릿 세로도 넓어서 가로 배치로 바뀌므로, 실제 방향(orientation)까지 확인함 */
+@media (min-width:600px){
+  .wrap{max-width:1240px;padding-inline:28px;gap:20px}
+  h1{font-size:2.4rem}
+  .tabs button{font-size:1.35rem;padding:14px 0}
+  .days{gap:8px}
+  .days button{font-size:1.05rem;padding:11px 0}
+  .grid{grid-template-columns:repeat(4,1fr);gap:14px}
+  .tile{font-size:1.05rem;border-radius:16px;padding:14px}
+  .tile .badge{font-size:.75rem;top:8px;left:8px}
+  .sheet{align-items:center}
+  .sheet-in{max-width:620px;border-radius:18px;padding:28px}
+}
+@media (min-width:760px){.grid{grid-template-columns:repeat(5,1fr)}}
+@media (min-width:900px){.grid{grid-template-columns:repeat(6,1fr)}}
+@media (min-width:1100px) and (orientation:landscape){
+  .controls{display:grid;grid-template-columns:minmax(340px,400px) 1fr;align-items:center;gap:20px}
+  .grid{grid-template-columns:repeat(7,1fr);gap:16px}
+  .tile{font-size:1.1rem}
+}
+</style>
+
+<div class="wrap">
+  <header class="head">
+    <h1>웹툰 알림판</h1>
+    <div class="head-actions">
+      <button class="ghost" id="editToggle" type="button" aria-pressed="false">편집</button>
+      <button class="ghost icon-btn" id="settingsBtn" type="button" aria-label="설정" title="설정">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="controls">
+    <div class="tabs" role="tablist" id="tabs">
+      <button role="tab" data-p="naver" aria-selected="true">네이버</button>
+      <button role="tab" data-p="series" aria-selected="false">시리즈</button>
+      <button role="tab" data-p="kakao" aria-selected="false">카카오</button>
+    </div>
+    <div class="days filter" id="dayChips"></div>
+  </div>
+
+  <section class="grid" id="grid" aria-live="polite"></section>
+
+</div>
+
+<div class="sheet" id="settings" hidden>
+  <div class="sheet-in" role="dialog" aria-labelledby="setTitle">
+    <div class="set-head">
+      <h2 id="setTitle">설정</h2>
+      <button type="button" class="ghost" id="closeSettings">닫기</button>
+    </div>
+    <section class="set-sec">
+      <h3>작품 추가</h3>
+      <form class="add" id="addForm" autocomplete="off">
+        <input id="addUrl" type="url" inputmode="url" placeholder="작품 주소 붙여 넣기" aria-label="작품 주소">
+        <button class="primary" type="submit">추가</button>
+      </form>
+      <p class="small">앱에서 ‘공유 → 링크 복사’ 후 붙여 넣어요. 여러 줄을 한 번에 넣어도 돼요.</p>
+      <div id="addMsg" class="msg" hidden></div>
+    </section>
+    <section class="set-sec" id="ghSec">
+      <h3>깃허브 연결</h3>
+      <p class="small" id="ghIntro">목록을 깃허브 비공개 보관함에 저장해서 휴대폰과 태블릿이 같은 목록을 보게 해요.</p>
+      <p class="small" id="ghInClaude" hidden>깃허브 연결은 깃허브에 올린 알림판에서만 쓸 수 있어요. 이 화면(Claude 안)에서는 목록이 Claude 계정에 저장돼요.</p>
+      <form id="ghForm" autocomplete="off">
+        <div class="field">
+          <label for="ghRepo">목록 보관함</label>
+          <input id="ghRepo" type="text" placeholder="아이디/webtoon-data" autocapitalize="off" spellcheck="false">
+        </div>
+        <div class="field">
+          <label for="ghToken">열쇠</label>
+          <input id="ghToken" type="password" placeholder="github_pat_..." autocapitalize="off" spellcheck="false">
+        </div>
+        <button class="primary" type="submit">연결</button>
+      </form>
+      <div id="ghOn" hidden>
+        <div class="gh-status" id="ghStatus"><i></i><span></span></div>
+        <div class="row" style="margin-top:10px">
+          <button type="button" id="ghPullBtn">지금 불러오기</button>
+          <button type="button" class="danger" id="ghOff">연결 끊기</button>
+        </div>
+      </div>
+      <div id="ghMsg" class="msg err" hidden></div>
+    </section>
+    <section class="set-sec">
+      <h3>백업</h3>
+      <div class="row">
+        <button id="exportBtn" type="button">내보내기</button>
+        <button id="importBtn" type="button">가져오기</button>
+        <input id="importFile" type="file" accept=".json,.txt,application/json,text/plain" hidden>
+      </div>
+      <div id="importAsk" class="msg" hidden></div>
+      <div id="exportFallback" hidden>
+        <p class="small">이 화면에서는 파일 저장이 막혀 있어요. 아래 내용을 복사해 .json 파일로 저장하세요.</p>
+        <textarea id="exportText" readonly></textarea>
+        <button id="copyExport" type="button">복사하기</button>
+      </div>
+    </section>
+  </div>
+</div>
+
+<div class="sheet" id="sheet" hidden>
+  <form class="sheet-in" id="editForm" autocomplete="off">
+    <h2 id="sheetTitle">작품 추가</h2>
+    <span class="ptag" id="fPlat"></span>
+    <div class="field">
+      <label for="fTitle">제목</label>
+      <input id="fTitle" type="text" maxlength="60" placeholder="작품 제목">
+    </div>
+    <div class="field">
+      <label for="fUrl">주소</label>
+      <input id="fUrl" type="url" inputmode="url">
+    </div>
+    <div class="field">
+      <span class="lab">연재 요일</span>
+      <div class="days" id="fDays"></div>
+    </div>
+    <div class="field">
+      <span class="lab">상태</span>
+      <div class="seg" id="fStatus">
+        <button type="button" data-s="ongoing">연재 중</button>
+        <button type="button" data-s="paused">휴재</button>
+        <button type="button" data-s="done">완결</button>
+      </div>
+    </div>
+    <div class="row">
+      <button type="button" class="ghost" id="cancelEdit">취소</button>
+      <button type="submit" class="primary">저장</button>
+    </div>
+    <button type="button" class="danger" id="deleteBtn" hidden>이 작품 삭제</button>
+  </form>
+</div>
+
+<script>
+(() => {
+  const DAY = ["일","월","화","수","목","금","토"];
+  const ORDER = [1,2,3,4,5,6,0];
+  const PNAME = { naver: "네이버웹툰", series: "네이버 시리즈", kakao: "카카오페이지" };
+  const SHORT = { naver: "네이버", series: "시리즈", kakao: "카카오" };
+  const STATUS = { paused: "휴재", done: "완결" };
+  const LS_KEY = "webtoon-board-v1";
+  const $ = id => document.getElementById(id);
+  const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+  let items = [];
+  let platform = "naver";
+  let pick = new Date().getDay();   // 요일 숫자, "paused", "done", 또는 null(전체)
+  let editMode = false;
+  let editingId = null, draft = null;
+  let docRef = null, pendingImport = null;
+
+  try { const u = JSON.parse(localStorage.getItem("webtoon-board-ui") || "{}"); if (PNAME[u.platform]) platform = u.platform; } catch(e){}
+
+  /* 주소 해석 */
+  function parseUrl(raw) {
+    let s = (raw || "").trim(); if (!s) return null;
+    if (!/^https?:\/\//i.test(s)) s = "https://" + s;
+    let u; try { u = new URL(s); } catch(e) { return null; }
+    const host = u.hostname.replace(/^www\./, "");
+    if (/(^|\.)comic\.naver\.com$/.test(host)) return { platform: "naver", contentId: u.searchParams.get("titleId") || "", url: u.href };
+    if (/(^|\.)series\.naver\.com$/.test(host)) return { platform: "series", contentId: u.searchParams.get("productNo") || "", url: u.href };
+    if (/(^|\.)page\.kakao\.com$/.test(host)) { const m = u.pathname.match(/\/content\/(\d+)/); return { platform: "kakao", contentId: m ? m[1] : "", url: u.href }; }
+    return null;
+  }
+  const keyOf = it => it.contentId ? it.platform + ":" + it.contentId : it.url;
+  const uid = () => "w" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const defaultTitle = p => SHORT[p.platform] + " " + (p.contentId || "");
+  const extractUrls = t => t.match(/(https?:\/\/[^\s"'<>]+|(?:m\.)?(?:comic|series)\.naver\.com[^\s"'<>]*|page\.kakao\.com[^\s"'<>]*)/gi) || [];
+  const statusOf = it => STATUS[it.status] ? it.status : "ongoing";
+
+  /* 요일 + 휴재/완결 버튼 */
+  function buildFilter() {
+    const wrap = $("dayChips"); wrap.replaceChildren();
+    const today = new Date().getDay();
+    for (const d of ORDER) {
+      const b = el("button", d === today ? "today" : "", DAY[d]);
+      b.type = "button"; b.dataset.v = d;
+      wrap.append(b);
+    }
+    for (const s of ["paused", "done"]) {
+      const b = el("button", "st", STATUS[s]); b.type = "button"; b.dataset.v = s;
+      wrap.append(b);
+    }
+    wrap.addEventListener("click", e => {
+      const b = e.target.closest("button"); if (!b) return;
+      const v = /^\d$/.test(b.dataset.v) ? Number(b.dataset.v) : b.dataset.v;
+      pick = pick === v ? null : v;
+      render();
+    });
+  }
+  buildFilter();
+
+  (function buildSheetDays() {
+    const wrap = $("fDays");
+    for (const d of ORDER) {
+      const b = el("button", "", DAY[d]); b.type = "button"; b.dataset.d = d; b.setAttribute("aria-pressed", "false");
+      b.addEventListener("click", () => b.setAttribute("aria-pressed", String(b.getAttribute("aria-pressed") !== "true")));
+      wrap.append(b);
+    }
+  })();
+  function setStatus(s) { document.querySelectorAll("#fStatus button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.s === s))); }
+  $("fStatus").addEventListener("click", e => { const b = e.target.closest("button"); if (b) setStatus(b.dataset.s); });
+
+  /* 화면 */
+  function render() {
+    document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.p === platform)));
+    document.querySelectorAll("#dayChips button").forEach(b => b.setAttribute("aria-pressed", String(String(pick) === b.dataset.v)));
+    $("editToggle").setAttribute("aria-pressed", String(editMode));
+    $("editToggle").textContent = editMode ? "완료" : "편집";
+
+    const grid = $("grid");
+    grid.classList.toggle("editing", editMode);
+    grid.replaceChildren();
+    const rank = { ongoing: 0, paused: 1, done: 2 };
+    const view = items
+      .filter(it => it.platform === platform)
+      .filter(it => {
+        const st = statusOf(it);
+        if (pick === null) return true;
+        if (typeof pick === "string") return st === pick;
+        return st === "ongoing" && (it.days || []).includes(pick);
+      })
+      .sort((a, b) => rank[statusOf(a)] - rank[statusOf(b)] || a.title.localeCompare(b.title, "ko"));
+
+    if (!view.length) {
+      const name = SHORT[platform];
+      let text;
+      if (!items.some(it => it.platform === platform)) text = `아직 ${name} 작품이 없어요. 앱에서 ‘공유 → 링크 복사’ 후 오른쪽 위 ⚙ 설정에서 붙여 넣어 주세요.`;
+      else if (typeof pick === "string") text = `${STATUS[pick]}인 ${name} 작품이 없어요.`;
+      else if (pick !== null) text = `${DAY[pick]}요일에 볼 ${name} 작품이 없어요.`;
+      else text = `${name} 작품이 없어요.`;
+      grid.append(el("div", "empty", text));
+      return;
+    }
+    for (const it of view) {
+      const st = statusOf(it);
+      // 편집 중에는 링크가 아닌 일반 버튼으로 만들어서, 눌러도 주소로 이동하지 않게 함
+      const a = el(editMode ? "button" : "a", "tile " + it.platform + (st !== "ongoing" ? " " + st : ""));
+      if (st !== "ongoing" && typeof pick !== "string") a.append(el("b", "badge", STATUS[st]));
+      a.append(el("span", "", it.title));
+      if (editMode) { a.type = "button"; a.addEventListener("click", () => openSheet(it)); }
+      else { a.href = it.url; a.target = "_blank"; a.rel = "noopener"; }
+      grid.append(a);
+    }
+  }
+
+  $("tabs").addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    platform = b.dataset.p;
+    try { localStorage.setItem("webtoon-board-ui", JSON.stringify({ platform })); } catch(e){}
+    render();
+  });
+  $("editToggle").addEventListener("click", () => { editMode = !editMode; render(); });
+
+  /* 설정 창 */
+  function openSettings() { $("settings").hidden = false; }
+  function closeSettings() { $("settings").hidden = true; $("addMsg").hidden = true; }
+  $("settingsBtn").addEventListener("click", openSettings);
+  $("closeSettings").addEventListener("click", closeSettings);
+  $("settings").addEventListener("click", e => { if (e.target === $("settings")) closeSettings(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("settings").hidden) closeSettings(); });
+
+  /* 추가 / 수정 */
+  function showPlat(p) { $("fPlat").className = "ptag " + p; $("fPlat").textContent = PNAME[p]; }
+  function openSheet(it) {
+    editingId = items.some(x => x.id === it.id) ? it.id : null;
+    draft = it;
+    $("sheetTitle").textContent = editingId ? "작품 수정" : "작품 추가";
+    showPlat(it.platform);
+    $("fTitle").value = editingId ? it.title : "";
+    $("fUrl").value = it.url;
+    document.querySelectorAll("#fDays button").forEach(b => b.setAttribute("aria-pressed", String((it.days || []).includes(Number(b.dataset.d)))));
+    setStatus(statusOf(it));
+    $("deleteBtn").hidden = !editingId;
+    $("deleteBtn").textContent = "이 작품 삭제";
+    delete $("deleteBtn").dataset.armed;
+    $("sheet").hidden = false;
+    setTimeout(() => $("fTitle").focus(), 30);
+  }
+  const closeSheet = () => { $("sheet").hidden = true; editingId = null; draft = null; };
+  $("cancelEdit").addEventListener("click", closeSheet);
+  $("sheet").addEventListener("click", e => { if (e.target === $("sheet")) closeSheet(); });
+  document.addEventListener("keydown", e => { if (e.key === "Escape" && !$("sheet").hidden) closeSheet(); });
+  $("fUrl").addEventListener("input", () => { const p = parseUrl($("fUrl").value); if (p) showPlat(p.platform); });
+
+  $("deleteBtn").addEventListener("click", () => {
+    const b = $("deleteBtn");
+    if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "한 번 더 누르면 삭제돼요"; return; }
+    items = items.filter(x => x.id !== editingId);
+    persist(); closeSheet(); render();
+  });
+
+  $("editForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const p = parseUrl($("fUrl").value);
+    if (!p) { $("fUrl").focus(); return; }
+    const sBtn = document.querySelector("#fStatus button[aria-pressed='true']");
+    const next = {
+      id: editingId || draft.id || uid(),
+      url: p.url, platform: p.platform, contentId: p.contentId,
+      title: $("fTitle").value.trim() || defaultTitle(p),
+      days: [...document.querySelectorAll("#fDays button[aria-pressed='true']")].map(b => Number(b.dataset.d)),
+      status: sBtn ? sBtn.dataset.s : "ongoing",
+      addedAt: draft.addedAt || Date.now()
+    };
+    if (editingId) items = items.map(x => x.id === editingId ? next : x); else items.push(next);
+    platform = next.platform;
+    persist(); closeSheet(); render();
+  });
+
+  function addMsg(text, err) {
+    const m = $("addMsg"); m.textContent = text; m.className = "msg" + (err ? " err" : ""); m.hidden = false;
+    clearTimeout(addMsg.t); addMsg.t = setTimeout(() => m.hidden = true, 5000);
+  }
+  $("addForm").addEventListener("submit", e => {
+    e.preventDefault();
+    const raw = $("addUrl").value;
+    const found = extractUrls(raw).map(parseUrl).filter(Boolean);
+    if (!found.length) { const one = parseUrl(raw); if (one) found.push(one); }
+    if (!found.length) { addMsg("네이버웹툰, 네이버 시리즈, 카카오페이지 주소를 붙여 넣어 주세요.", true); return; }
+    const existing = new Set(items.map(keyOf));
+    if (found.length === 1) {
+      const p = found[0];
+      if (existing.has(keyOf(p))) { addMsg("이미 있는 작품이에요.", true); return; }
+      $("addUrl").value = "";
+      closeSettings();
+      openSheet({ ...p, id: uid(), title: "", days: typeof pick === "number" ? [pick] : [], status: typeof pick === "string" ? pick : "ongoing", addedAt: Date.now() });
+      return;
+    }
+    let added = 0;
+    for (const p of found) {
+      if (existing.has(keyOf(p))) continue;
+      existing.add(keyOf(p));
+      items.push({ ...p, id: uid(), title: defaultTitle(p), days: [], status: "ongoing", addedAt: Date.now() + added });
+      added++;
+    }
+    $("addUrl").value = "";
+    persist(); render();
+    addMsg(`${added}개를 추가했어요. ‘편집’에서 제목과 요일을 정해 주세요.`);
+  });
+  $("addUrl").addEventListener("paste", e => {
+    const t = e.clipboardData?.getData("text") || "";
+    if (/\n/.test(t.trim())) { e.preventDefault(); $("addUrl").value = t.replace(/\s+/g, " ").trim(); }
+  });
+
+  /* 저장 */
+  function clean(list) {
+    return list.filter(x => x && typeof x.url === "string").map(x => {
+      const p = parseUrl(x.url); if (!p) return null;
+      return {
+        id: typeof x.id === "string" ? x.id : uid(),
+        url: p.url, platform: p.platform, contentId: p.contentId,
+        title: String(x.title || "").slice(0, 60) || defaultTitle(p),
+        days: Array.isArray(x.days) ? x.days.map(Number).filter(d => d >= 0 && d <= 6) : [],
+        status: STATUS[x.status] ? x.status : (x.paused ? "paused" : "ongoing"),
+        addedAt: Number(x.addedAt) || Date.now()
+      };
+    }).filter(Boolean);
+  }
+  let writing = false, dirty = false, t = null;
+  function persist() {
+    try { localStorage.setItem(LS_KEY, JSON.stringify(items)); } catch(e){}
+    ghQueue();
+    if (!docRef) return;
+    dirty = true; clearTimeout(t); t = setTimeout(flush, 600);
+  }
+  async function flush() {
+    if (writing || !dirty || !docRef) return;
+    writing = true; dirty = false;
+    try { await docRef.set({ items, updatedAt: Date.now() }); }
+    catch (e) { if (e && e.code === "unavailable") { dirty = true; setTimeout(flush, 1500 + Math.random() * 1000); } }
+    writing = false;
+    if (dirty) flush();
+  }
+
+  try { const s = localStorage.getItem(LS_KEY); if (s) items = clean(JSON.parse(s)); } catch(e){}
+  render();
+
+  /* ---------- 깃허브 연결 (깃허브에 올린 알림판에서만) ---------- */
+  const GH_KEY = "webtoon-board-gh";
+  const inClaude = !!window.claude || /claude/i.test(location.hostname);
+  let gh = null, ghSha = null, ghBusy = false, ghDirty = false, ghTimer = null;
+  try { gh = JSON.parse(localStorage.getItem(GH_KEY) || "null"); } catch(e){}
+  if (inClaude) gh = null;
+
+  const b64e = str => { const bytes = new TextEncoder().encode(str); let bin = ""; for (let i = 0; i < bytes.length; i += 8192) bin += String.fromCharCode(...bytes.subarray(i, i + 8192)); return btoa(bin); };
+  const b64d = str => new TextDecoder().decode(Uint8Array.from(atob(str.replace(/\s/g, "")), c => c.charCodeAt(0)));
+  const nowClock = () => { const d = new Date(); return d.getHours() + ":" + String(d.getMinutes()).padStart(2, "0"); };
+
+  function ghShow() {
+    $("ghIntro").hidden = inClaude; $("ghInClaude").hidden = !inClaude;
+    $("ghForm").hidden = inClaude || !!gh;
+    $("ghOn").hidden = inClaude || !gh;
+    $("ghOff").textContent = "연결 끊기"; delete $("ghOff").dataset.armed;
+  }
+  function ghSet(text, err) {
+    const st = $("ghStatus"); st.className = "gh-status" + (err ? " err" : ""); st.querySelector("span").textContent = text;
+  }
+  function ghErr(text) { const m = $("ghMsg"); m.textContent = text; m.hidden = !text; }
+
+  async function ghReq(method, body) {
+    return fetch(`https://api.github.com/repos/${gh.repo}/contents/list.json`, {
+      method, cache: "no-store",
+      headers: { Authorization: `Bearer ${gh.token}`, Accept: "application/vnd.github+json", ...(body ? { "Content-Type": "application/json" } : {}) },
+      body: body ? JSON.stringify(body) : undefined
+    });
+  }
+  function ghFail(status) {
+    if (status === 401) return "열쇠가 맞지 않아요. 열쇠를 다시 확인해 주세요.";
+    if (status === 403) return "열쇠에 이 보관함을 쓸 권한이 없어요. 열쇠 설정에서 ‘Contents: Read and write’를 켜 주세요.";
+    if (status === 404) return "보관함을 찾지 못했어요. 이름(아이디/보관함)과 열쇠의 보관함 선택을 확인해 주세요.";
+    return "연결에 실패했어요. 인터넷 연결을 확인해 주세요.";
+  }
+
+  // 불러오기: merge=true면 처음 연결할 때처럼 기기 목록과 합침
+  async function ghPull(merge) {
+    if (!gh) return false;
+    if (ghDirty || ghBusy) { ghPush(); return true; }
+    ghSet("불러오는 중");
+    try {
+      const r = await ghReq("GET");
+      if (r.status === 404) {
+        // 파일이 아직 없으면 새로 만듦 (보관함 자체가 없으면 저장 단계에서 알려줌)
+        ghSha = null; ghDirty = true; await ghPush(); return !!gh && ghSha !== null;
+      }
+      if (!r.ok) { ghSet(ghFail(r.status), true); return false; }
+      const j = await r.json();
+      ghSha = j.sha;
+      const data = JSON.parse(b64d(j.content || ""));
+      const remote = clean(Array.isArray(data.items) ? data.items : []);
+      if (merge) {
+        const seen = new Set(remote.map(keyOf));
+        const extra = items.filter(x => !seen.has(keyOf(x)));
+        items = remote.concat(extra);
+        try { localStorage.setItem(LS_KEY, JSON.stringify(items)); } catch(e){}
+        if (extra.length) { ghDirty = true; ghPush(); }
+      } else {
+        items = remote;
+        try { localStorage.setItem(LS_KEY, JSON.stringify(items)); } catch(e){}
+      }
+      if ($("sheet").hidden) render();
+      ghSet(`연결됨 · ${nowClock()}에 불러옴`);
+      return true;
+    } catch (e) { ghSet(ghFail(0), true); return false; }
+  }
+
+  async function ghPush() {
+    if (!gh || ghBusy || !ghDirty) return;
+    ghBusy = true; ghDirty = false;
+    ghSet("저장하는 중");
+    const body = {
+      message: "목록 저장 " + new Date().toISOString(),
+      content: b64e(JSON.stringify({ app: "webtoon-board", version: 3, updatedAt: new Date().toISOString(), items }, null, 2))
+    };
+    if (ghSha) body.sha = ghSha;
+    try {
+      let r = await ghReq("PUT", body);
+      if (r.status === 409 || r.status === 422) {
+        // 다른 기기에서 먼저 저장한 경우: 최신 표시만 받아 와서 지금 목록으로 덮어씀
+        const g = await ghReq("GET");
+        if (g.ok) { ghSha = (await g.json()).sha; body.sha = ghSha; r = await ghReq("PUT", body); }
+      }
+      if (r.ok) { ghSha = (await r.json()).content.sha; ghSet(`저장됨 · ${nowClock()}`); }
+      else { ghSet(ghFail(r.status), true); if (r.status >= 500) ghDirty = true; }
+    } catch (e) { ghSet("인터넷이 안 돼서 이 기기에만 저장했어요. 연결되면 다시 저장해요.", true); ghDirty = true; }
+    ghBusy = false;
+    if (ghDirty && navigator.onLine !== false) { clearTimeout(ghTimer); ghTimer = setTimeout(ghPush, 4000); }
+  }
+  function ghQueue() {
+    if (!gh) return;
+    ghDirty = true; clearTimeout(ghTimer); ghTimer = setTimeout(ghPush, 800);
+  }
+
+  $("ghForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    ghErr("");
+    let repo = $("ghRepo").value.trim().replace(/^https?:\/\/(www\.)?github\.com\//i, "").replace(/\.git$/, "").replace(/\/+$/, "");
+    const token = $("ghToken").value.trim();
+    if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) { ghErr("보관함은 ‘아이디/보관함이름’ 모양으로 적어 주세요."); $("ghRepo").focus(); return; }
+    if (token.length < 20) { ghErr("열쇠를 붙여 넣어 주세요."); $("ghToken").focus(); return; }
+    gh = { repo, token }; ghSha = null;
+    $("ghForm").hidden = true; $("ghOn").hidden = false;
+    const ok = await ghPull(true);
+    if (ok && gh) {
+      try { localStorage.setItem(GH_KEY, JSON.stringify(gh)); } catch(e){}
+      $("ghToken").value = "";
+    } else {
+      const msg = $("ghStatus").textContent;
+      gh = null; ghShow(); ghErr(msg || "연결에 실패했어요.");
+    }
+  });
+  $("ghPullBtn").addEventListener("click", () => ghPull(false));
+  $("ghOff").addEventListener("click", () => {
+    const b = $("ghOff");
+    if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "한 번 더 누르면 끊겨요"; return; }
+    gh = null; ghSha = null; ghDirty = false;
+    try { localStorage.removeItem(GH_KEY); } catch(e){}
+    ghShow();
+  });
+  document.addEventListener("visibilitychange", () => { if (!document.hidden && gh) ghPull(false); });
+  window.addEventListener("online", () => { if (gh && ghDirty) ghPush(); });
+
+  ghShow();
+  if (gh) ghPull(false);
+
+  (async () => {
+    try {
+      if (!window.claude?.use) return;
+      const [db, user] = await Promise.all([claude.use("db"), claude.use("user")]);
+      const id = user ? await user.id() : null;
+      if (!db || !id) return;
+      docRef = db.doc("data/users/" + id + "/list");
+      let first = true;
+      docRef.onSnapshot(snap => {
+        const data = snap.exists ? snap.data() : null;
+        if (data && Array.isArray(data.items)) {
+          if (!snap.metadata.hasPendingWrites && !writing && !dirty) {
+            items = clean(data.items);
+            try { localStorage.setItem(LS_KEY, JSON.stringify(items)); } catch(e){}
+            if ($("sheet").hidden) render();
+          }
+        } else if (first && items.length) persist();
+        first = false;
+      }, () => {});
+    } catch (e) {}
+  })();
+
+  /* 내보내기 / 가져오기 */
+  $("exportBtn").addEventListener("click", async () => {
+    const d = new Date(), p = n => String(n).padStart(2, "0");
+    const filename = `webtoon-list-${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}.json`;
+    const data = JSON.stringify({ app: "webtoon-board", version: 3, exportedAt: d.toISOString(), items }, null, 2);
+    // Claude 밖(일반 브라우저)에서 열었을 때는 브라우저가 바로 파일을 내려받게 함
+    if (!window.claude?.use) {
+      try {
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(new Blob([data], { type: "application/json" }));
+        a.download = filename; document.body.append(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+        return;
+      } catch (e) { $("exportText").value = data; $("exportFallback").hidden = false; return; }
+    }
+    try {
+      const dl = await claude.use("downloads");
+      if (!dl) throw { code: "unavailable" };
+      await dl.save({ filename, data });
+      $("exportFallback").hidden = true;
+    } catch (e) {
+      if (e && (e.code === "declined" || e.code === "rate_limited")) return;
+      $("exportText").value = data; $("exportFallback").hidden = false;
+    }
+  });
+  $("copyExport").addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText($("exportText").value); $("copyExport").textContent = "복사했어요"; }
+    catch (e) { $("exportText").focus(); $("exportText").select(); }
+  });
+
+  $("importBtn").addEventListener("click", () => $("importFile").click());
+  $("importFile").addEventListener("change", () => {
+    const f = $("importFile").files[0]; if (!f) return;
+    const r = new FileReader();
+    r.onload = () => { handleImport(String(r.result || "")); $("importFile").value = ""; };
+    r.readAsText(f);
+  });
+  function handleImport(text) {
+    let list = null;
+    try {
+      const j = JSON.parse(text);
+      const arr = Array.isArray(j) ? j : Array.isArray(j.items) ? j.items : null;
+      if (arr) list = clean(arr.map(x => typeof x === "string" ? { url: x } : x));
+    } catch (e) {}
+    if (!list) list = clean(extractUrls(text).map(u => ({ url: u })));
+    const box = $("importAsk"); box.replaceChildren(); box.hidden = false; box.className = "msg";
+    if (!list.length) { box.className = "msg err"; box.textContent = "파일에서 작품 주소를 찾지 못했어요."; return; }
+    pendingImport = list;
+    const ex = new Set(items.map(keyOf));
+    const fresh = list.filter(x => !ex.has(keyOf(x))).length;
+    box.append(el("p", "small", `작품 ${list.length}개 중 새 작품 ${fresh}개를 찾았어요.`));
+    const row = el("div", "row");
+    const merge = el("button", "primary", "합치기"); merge.type = "button";
+    const replace = el("button", "", "전체 바꾸기"); replace.type = "button";
+    const cancel = el("button", "ghost", "취소"); cancel.type = "button";
+    merge.onclick = () => {
+      const s = new Set(items.map(keyOf));
+      for (const x of pendingImport) if (!s.has(keyOf(x))) { items.push({ ...x, id: uid() }); s.add(keyOf(x)); }
+      done(`새 작품 ${fresh}개를 추가했어요.`);
+    };
+    replace.onclick = () => {
+      if (!replace.dataset.armed) { replace.dataset.armed = "1"; replace.textContent = "한 번 더 누르면 바뀌어요"; return; }
+      items = pendingImport.map(x => ({ ...x }));
+      done(`파일 내용으로 바꿨어요. 작품 ${items.length}개.`);
+    };
+    cancel.onclick = () => { box.hidden = true; pendingImport = null; };
+    row.append(merge, replace, cancel);
+    box.append(row);
+    function done(msg) { pendingImport = null; persist(); render(); box.replaceChildren(el("p", "small", msg)); }
+  }
+})();
+</script>
+
+</body>
+</html>
