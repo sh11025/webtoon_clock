@@ -59,12 +59,13 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
 
 /* day + status chips */
 .days{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
-.filter{grid-template-columns:repeat(7,1fr) 1.35fr 1.35fr}
+.filter{grid-template-columns:repeat(21,minmax(0,1fr))}
+.filter button{grid-column:span 3}
+.filter button.st{grid-column:span 7}
 .days button{padding:8px 0;border-radius:999px;font-size:.92rem;min-width:0}
 .days button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
 .days button.today{font-weight:700}
 .filter button.st{border-style:dashed}
-.filter button.st:first-of-type{margin-left:4px}
 .seg{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
 .seg button{padding:9px 0;border-radius:8px}
 .seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
@@ -148,6 +149,8 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
   h1{font-size:2.4rem}
   .tabs button{font-size:1.35rem;padding:14px 0}
   .days{gap:8px}
+  .filter{grid-template-columns:repeat(7,minmax(0,1fr)) repeat(3,minmax(0,1.35fr))}
+  .filter button,.filter button.st{grid-column:auto}
   .days button{font-size:1.05rem;padding:11px 0}
   /* 책장형: 큰 표지 + 아래 제목 */
   .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:24px 16px;background:transparent;border:0;border-radius:0;overflow:visible}
@@ -281,7 +284,7 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
       <input id="fUrl" type="url" inputmode="url">
     </div>
     <div class="field">
-      <span class="lab">연재 요일</span>
+      <span class="lab">연재 요일 <span style="font-weight:400">(비워 두면 ‘비정기’에 모여요)</span></span>
       <div class="days" id="fDays"></div>
     </div>
     <div class="field">
@@ -307,6 +310,9 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
   const PNAME = { naver: "네이버웹툰", series: "네이버 시리즈", kakao: "카카오페이지" };
   const SHORT = { naver: "네이버", series: "시리즈", kakao: "카카오" };
   const STATUS = { paused: "휴재", done: "완결" };
+  // 위쪽 버튼: 비정기(연재 중인데 요일이 없는 작품) + 휴재 + 완결
+  const FILTERS = { irregular: "비정기", paused: "휴재", done: "완결" };
+  const isIrregular = it => statusOf(it) === "ongoing" && !(it.days || []).length;
   const LS_KEY = "webtoon-board-v1";
   const $ = id => document.getElementById(id);
   const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
@@ -390,8 +396,8 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
       b.type = "button"; b.dataset.v = d;
       wrap.append(b);
     }
-    for (const s of ["paused", "done"]) {
-      const b = el("button", "st", STATUS[s]); b.type = "button"; b.dataset.v = s;
+    for (const s of ["irregular", "paused", "done"]) {
+      const b = el("button", "st", FILTERS[s]); b.type = "button"; b.dataset.v = s;
       wrap.append(b);
     }
     wrap.addEventListener("click", e => {
@@ -430,6 +436,7 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
       .filter(it => {
         const st = statusOf(it);
         if (pick === null) return true;
+        if (pick === "irregular") return isIrregular(it);
         if (typeof pick === "string") return st === pick;
         return st === "ongoing" && (it.days || []).includes(pick);
       })
@@ -439,6 +446,7 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
       const name = SHORT[platform];
       let text;
       if (!items.some(it => it.platform === platform)) text = `아직 ${name} 작품이 없어요. 앱에서 ‘공유 → 링크 복사’ 후 오른쪽 위 ⚙ 설정에서 붙여 넣어 주세요.`;
+      else if (pick === "irregular") text = `비정기 연재인 ${name} 작품이 없어요. 요일을 비워 둔 연재 중 작품이 여기에 모여요.`;
       else if (typeof pick === "string") text = `${STATUS[pick]}인 ${name} 작품이 없어요.`;
       else if (pick !== null) text = `${DAY[pick]}요일에 볼 ${name} 작품이 없어요.`;
       else text = `${name} 작품이 없어요.`;
@@ -471,7 +479,8 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
     a.append(coverEl(it));
     const info = el("div", "info");
     info.append(el("span", "title", it.title));
-    const sub = [daysText(it.days) ? daysText(it.days) + "요일" : "", it.author || ""].filter(Boolean).join(" · ");
+    const dayLabel = (it.days || []).length >= 7 ? "매일" : (daysText(it.days) ? daysText(it.days) + "요일" : (isIrregular(it) ? "비정기" : ""));
+    const sub = [dayLabel, it.author || ""].filter(Boolean).join(" · ");
     info.append(el("span", "sub", sub || PNAME[it.platform]));
     a.append(info);
     if (st !== "ongoing" && typeof pick !== "string") a.append(el("b", "badge", STATUS[st]));
