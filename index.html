@@ -69,19 +69,42 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
 .seg button{padding:9px 0;border-radius:8px}
 .seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
 
-/* square grid */
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.tile{width:100%;font-family:inherit;white-space:normal;cursor:pointer;aspect-ratio:1/1;max-width:100%;border-radius:14px;display:flex;align-items:center;justify-content:center;text-align:center;padding:10px;text-decoration:none;font-weight:700;font-size:.95rem;line-height:1.3;overflow:hidden;word-break:keep-all;overflow-wrap:anywhere;border:1.5px solid transparent;position:relative}
-.tile.naver{background:var(--naver-soft);color:var(--naver-ink)}
-.tile.series{background:var(--series-soft);color:var(--series-ink)}
-.tile.kakao{background:var(--kakao-soft);color:var(--kakao-ink)}
-.tile.paused,.tile.done{background:var(--surface-2);color:var(--muted)}
-.tile .badge{position:absolute;top:6px;left:6px;font-size:.65rem;font-weight:700;padding:1px 6px;border-radius:5px;background:var(--fg);color:var(--bg)}
-.tile span{display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
-.editing .tile{border-style:dashed;border-color:var(--muted)}
-.editing .tile::after{content:"수정";position:absolute;top:6px;right:8px;font-size:.65rem;font-weight:500;color:var(--muted)}
-@media (prefers-reduced-motion:no-preference){.tile{transition:transform .1s}.tile:active{transform:scale(.96)}}
-.empty{border:1.5px dashed var(--line);border-radius:14px;padding:20px;color:var(--muted);font-size:.9rem;text-align:center;grid-column:1/-1}
+/* 작품 목록: 스마트폰은 목록형(작은 표지 + 정보), 태블릿은 책장형(큰 표지 + 아래 제목) */
+.grid{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+.card{display:flex;align-items:center;justify-content:flex-start;gap:12px;width:100%;padding:10px 12px;margin:0;text-decoration:none;color:var(--fg);background:transparent;border:0;border-bottom:1px solid var(--line);border-radius:0;text-align:left;font:inherit;font-weight:400;white-space:normal;cursor:pointer;position:relative}
+.card:last-child{border-bottom:0}
+.cover{position:relative;flex:none;width:54px;aspect-ratio:3/4;max-width:100%;border-radius:8px;overflow:hidden;display:flex;align-items:center;justify-content:center;font-family:var(--f-display);font-size:1.6rem;line-height:1}
+.cover.naver{background:var(--naver-soft);color:var(--naver-ink)}
+.cover.series{background:var(--series-soft);color:var(--series-ink)}
+.cover.kakao{background:var(--kakao-soft);color:var(--kakao-ink)}
+.cover img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:var(--surface-2)}
+.card.paused .cover img,.card.done .cover img{filter:grayscale(.75);opacity:.75}
+.info{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.title{font-weight:700;font-size:1rem;line-height:1.35;word-break:keep-all;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.sub{font-size:.8rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.badge{flex:none;font-size:.7rem;font-weight:700;padding:2px 8px;border-radius:6px;background:var(--surface-2);color:var(--fg)}
+.chev{flex:none;width:18px;height:18px;color:var(--muted)}
+.edit-tag{display:none;flex:none;font-size:.72rem;font-weight:700;padding:3px 8px;border-radius:6px;border:1.5px dashed var(--muted);color:var(--muted)}
+.editing .edit-tag{display:inline-block}
+.editing .chev{display:none}
+@media (prefers-reduced-motion:no-preference){.card{transition:background-color .15s}.card:active{background:var(--surface-2)}}
+.empty{padding:22px 18px;color:var(--muted);font-size:.9rem;text-align:center}
+
+/* 제목 검색 */
+.seg2{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--surface-2);border-radius:10px;padding:4px}
+.seg2 button{border:0;background:transparent;border-radius:8px;padding:9px 0;color:var(--muted)}
+.seg2 button[aria-pressed="true"]{background:var(--surface);color:var(--fg);font-weight:700}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{padding:6px 12px;border-radius:999px;font-size:.82rem}
+.chips button[aria-pressed="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.results{display:flex;flex-direction:column;gap:8px}
+.res{display:flex;align-items:center;gap:12px;padding:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.res .cover{width:46px;font-size:1.3rem}
+.res .info{gap:3px}
+.res .title{font-size:.95rem;-webkit-line-clamp:2}
+.res .sub{display:flex;gap:6px;align-items:center}
+.res .added{flex:none;font-size:.82rem;color:var(--muted);padding:0 6px}
+.ptag.mini{font-size:.68rem;padding:1px 6px;align-self:center}
 
 /* add + backup */
 .add{display:flex;gap:8px}
@@ -116,8 +139,8 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
 .controls{display:flex;flex-direction:column;gap:12px}
 
 /* 화면 크기별 배치 (CSS 기준 폭)
-   - 스마트폰 1440x3120 세로: 약 360~410px → 한 줄에 3개
-   - 스마트폰 가로 / 태블릿 2000x3200 세로: 약 800~1000px → 5~6개, 글자·버튼 크게
+   - 스마트폰 1440x3120 세로: 약 360~410px → 목록형(한 줄에 1개)
+   - 스마트폰 가로 / 태블릿 2000x3200 세로: 약 800~1000px → 책장형 5~6개, 글자·버튼 크게
    - 태블릿 가로(기기를 실제로 눕혔을 때만): 7개, 탭과 요일을 한 줄에
    폭만 보면 태블릿 세로도 넓어서 가로 배치로 바뀌므로, 실제 방향(orientation)까지 확인함 */
 @media (min-width:600px){
@@ -126,18 +149,26 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
   .tabs button{font-size:1.35rem;padding:14px 0}
   .days{gap:8px}
   .days button{font-size:1.05rem;padding:11px 0}
-  .grid{grid-template-columns:repeat(4,1fr);gap:14px}
-  .tile{font-size:1.05rem;border-radius:16px;padding:14px}
-  .tile .badge{font-size:.75rem;top:8px;left:8px}
+  /* 책장형: 큰 표지 + 아래 제목 */
+  .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:24px 16px;background:transparent;border:0;border-radius:0;overflow:visible}
+  .card{flex-direction:column;align-items:stretch;gap:8px;padding:0;border:0}
+  .card:active{background:transparent}
+  .cover{width:100%;border-radius:12px;font-size:3.2rem;box-shadow:0 1px 0 rgba(0,0,0,.06)}
+  .title{font-size:1.02rem}
+  .sub{font-size:.82rem}
+  .badge{position:absolute;top:8px;left:8px;z-index:2;background:var(--fg);color:var(--bg);font-size:.75rem}
+  .chev{display:none}
+  .edit-tag{position:absolute;top:8px;right:8px;z-index:2;background:var(--surface);border-style:solid}
+  .editing .cover{outline:2px dashed var(--muted);outline-offset:3px}
+  .empty{grid-column:1/-1;border:1.5px dashed var(--line);border-radius:14px}
   .sheet{align-items:center}
   .sheet-in{max-width:620px;border-radius:18px;padding:28px}
 }
-@media (min-width:760px){.grid{grid-template-columns:repeat(5,1fr)}}
-@media (min-width:900px){.grid{grid-template-columns:repeat(6,1fr)}}
+@media (min-width:760px){.grid{grid-template-columns:repeat(5,minmax(0,1fr))}}
+@media (min-width:900px){.grid{grid-template-columns:repeat(6,minmax(0,1fr))}}
 @media (min-width:1100px) and (orientation:landscape){
   .controls{display:grid;grid-template-columns:minmax(340px,400px) 1fr;align-items:center;gap:20px}
-  .grid{grid-template-columns:repeat(7,1fr);gap:16px}
-  .tile{font-size:1.1rem}
+  .grid{grid-template-columns:repeat(7,minmax(0,1fr));gap:26px 18px}
 }
 </style>
 
@@ -173,11 +204,27 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
     </div>
     <section class="set-sec">
       <h3>작품 추가</h3>
-      <form class="add" id="addForm" autocomplete="off">
-        <textarea id="addUrl" rows="2" placeholder="공유 글이나 작품 주소 붙여 넣기" aria-label="공유 글이나 작품 주소" autocapitalize="off" spellcheck="false"></textarea>
-        <button class="primary" type="submit">추가</button>
-      </form>
-      <p class="small">웹툰 앱에서 ‘공유’로 받은 글을 그대로 붙여 넣으면 제목도 자동으로 들어가요. 여러 작품을 한 번에 넣어도 돼요.</p>
+      <div class="seg2" id="addMode">
+        <button type="button" data-m="paste" aria-pressed="true">공유 글·주소</button>
+        <button type="button" data-m="search" aria-pressed="false">제목 검색</button>
+      </div>
+      <div id="modePaste" style="display:flex;flex-direction:column;gap:10px">
+        <form class="add" id="addForm" autocomplete="off">
+          <textarea id="addUrl" rows="2" placeholder="공유 글이나 작품 주소 붙여 넣기" aria-label="공유 글이나 작품 주소" autocapitalize="off" spellcheck="false"></textarea>
+          <button class="primary" type="submit">추가</button>
+        </form>
+        <p class="small">웹툰 앱에서 ‘공유’로 받은 글을 그대로 붙여 넣으면 제목도 자동으로 들어가요. 여러 작품을 한 번에 넣어도 돼요.</p>
+      </div>
+      <div id="modeSearch" hidden style="display:flex;flex-direction:column;gap:10px">
+        <form class="add" id="searchForm" autocomplete="off">
+          <input id="searchQ" type="search" placeholder="작품 제목" aria-label="찾을 작품 제목" maxlength="50">
+          <button class="primary" type="submit" id="searchBtn">찾기</button>
+        </form>
+        <p class="small" id="searchHelp">네이버웹툰·시리즈·카카오페이지에서 함께 찾아요. 깃허브가 대신 찾아오느라 결과가 나오기까지 30초~1분쯤 걸려요.</p>
+        <div id="searchState" class="msg" hidden></div>
+        <div class="chips" id="searchFilter" hidden></div>
+        <div class="results" id="searchResults"></div>
+      </div>
       <div id="addMsg" class="msg" hidden></div>
     </section>
     <section class="set-sec" id="ghSec">
@@ -398,16 +445,41 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
       grid.append(el("div", "empty", text));
       return;
     }
-    for (const it of view) {
-      const st = statusOf(it);
-      // 편집 중에는 링크가 아닌 일반 버튼으로 만들어서, 눌러도 주소로 이동하지 않게 함
-      const a = el(editMode ? "button" : "a", "tile " + it.platform + (st !== "ongoing" ? " " + st : ""));
-      if (st !== "ongoing" && typeof pick !== "string") a.append(el("b", "badge", STATUS[st]));
-      a.append(el("span", "", it.title));
-      if (editMode) { a.type = "button"; a.addEventListener("click", () => openSheet(it)); }
-      else { a.href = it.url; a.target = "_blank"; a.rel = "noopener"; }
-      grid.append(a);
-    }
+    for (const it of view) grid.append(card(it));
+  }
+
+  const CHEV = '<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
+  const initialOf = t => (String(t || "").trim().match(/[^\s\[\]()]/) || ["?"])[0];
+  const daysText = ds => (ds || []).slice().sort((a, b) => ORDER.indexOf(a) - ORDER.indexOf(b)).map(d => DAY[d]).join("·");
+
+  // 표지: 썸네일이 있으면 그림, 없거나 못 불러오면 제목 첫 글자
+  function coverEl(it, cls) {
+    const c = el("div", "cover " + it.platform + (cls ? " " + cls : ""));
+    const fallback = () => { c.replaceChildren(); c.textContent = initialOf(it.title); };
+    if (it.thumbnail) {
+      const img = el("img"); img.alt = ""; img.loading = "lazy"; img.decoding = "async";
+      img.referrerPolicy = "no-referrer"; img.onerror = fallback; img.src = it.thumbnail;
+      c.append(img);
+    } else fallback();
+    return c;
+  }
+
+  function card(it) {
+    const st = statusOf(it);
+    // 편집 중에는 링크가 아닌 일반 버튼으로 만들어서, 눌러도 주소로 이동하지 않게 함
+    const a = el(editMode ? "button" : "a", "card " + st);
+    a.append(coverEl(it));
+    const info = el("div", "info");
+    info.append(el("span", "title", it.title));
+    const sub = [daysText(it.days) ? daysText(it.days) + "요일" : "", it.author || ""].filter(Boolean).join(" · ");
+    info.append(el("span", "sub", sub || PNAME[it.platform]));
+    a.append(info);
+    if (st !== "ongoing" && typeof pick !== "string") a.append(el("b", "badge", STATUS[st]));
+    a.append(el("span", "edit-tag", "수정"));
+    a.insertAdjacentHTML("beforeend", CHEV);
+    if (editMode) { a.type = "button"; a.addEventListener("click", () => openSheet(it)); }
+    else { a.href = it.url; a.target = "_blank"; a.rel = "noopener"; }
+    return a;
   }
 
   $("tabs").addEventListener("click", e => {
@@ -461,12 +533,17 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
     const p = parseUrl($("fUrl").value, draft.platform);
     if (!p) { $("fUrl").focus(); return; }
     const sBtn = document.querySelector("#fStatus button[aria-pressed='true']");
+    const sameUrl = p.url === draft.url;
+    const status = sBtn ? sBtn.dataset.s : "ongoing";
     const next = {
       id: editingId || draft.id || uid(),
-      url: p.url, platform: p.platform, contentId: p.contentId,
+      url: p.url, platform: p.platform, contentId: p.contentId || (sameUrl ? draft.contentId || "" : ""),
       title: $("fTitle").value.trim() || defaultTitle(p),
+      thumbnail: sameUrl ? draft.thumbnail || "" : "",
+      author: sameUrl ? draft.author || "" : "",
       days: [...document.querySelectorAll("#fDays button[aria-pressed='true']")].map(b => Number(b.dataset.d)),
-      status: sBtn ? sBtn.dataset.s : "ongoing",
+      status,
+      statusEdited: editingId && status !== statusOf(draft) ? Date.now() : (draft.statusEdited || 0),
       addedAt: draft.addedAt || Date.now()
     };
     if (editingId) items = items.map(x => x.id === editingId ? next : x); else items.push(next);
@@ -516,8 +593,11 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
         id: typeof x.id === "string" ? x.id : uid(),
         url: p.url, platform: p.platform, contentId: p.contentId,
         title: String(x.title || "").slice(0, 60) || defaultTitle(p),
+        thumbnail: /^https:\/\//.test(x.thumbnail || "") ? String(x.thumbnail).slice(0, 500) : "",
+        author: String(x.author || "").slice(0, 80),
         days: Array.isArray(x.days) ? x.days.map(Number).filter(d => d >= 0 && d <= 6) : [],
         status: STATUS[x.status] ? x.status : (x.paused ? "paused" : "ongoing"),
+        statusEdited: Number(x.statusEdited) || 0,
         addedAt: Number(x.addedAt) || Date.now()
       };
     }).filter(Boolean);
@@ -553,6 +633,7 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
   const nowClock = () => { const d = new Date(); return d.getHours() + ":" + String(d.getMinutes()).padStart(2, "0"); };
 
   function ghShow() {
+    if (typeof updateSearchAvail === "function") try { updateSearchAvail(); } catch(e){}
     $("ghIntro").hidden = inClaude; $("ghInClaude").hidden = !inClaude;
     $("ghForm").hidden = inClaude || !!gh;
     $("ghOn").hidden = inClaude || !gh;
@@ -605,6 +686,7 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
       }
       if ($("sheet").hidden) render();
       ghSet(`연결됨 · ${nowClock()}에 불러옴`);
+      loadMeta();
       return true;
     } catch (e) { ghSet(ghFail(0), true); return false; }
   }
@@ -625,7 +707,7 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
         const g = await ghReq("GET");
         if (g.ok) { ghSha = (await g.json()).sha; body.sha = ghSha; r = await ghReq("PUT", body); }
       }
-      if (r.ok) { ghSha = (await r.json()).content.sha; ghSet(`저장됨 · ${nowClock()}`); }
+      if (r.ok) { ghSha = (await r.json()).content.sha; ghSet(`저장됨 · ${nowClock()}`); scheduleMetaPoll(); }
       else { ghSet(ghFail(r.status), true); if (r.status >= 500) ghDirty = true; }
     } catch (e) { ghSet("인터넷이 안 돼서 이 기기에만 저장했어요. 연결되면 다시 저장해요.", true); ghDirty = true; }
     ghBusy = false;
@@ -634,6 +716,173 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
   function ghQueue() {
     if (!gh) return;
     ghDirty = true; clearTimeout(ghTimer); ghTimer = setTimeout(ghPush, 800);
+  }
+
+  /* ---------- 깃허브 보관함의 다른 파일 읽고 쓰기 ---------- */
+  function ghApi(path, method, body, raw) {
+    return fetch(`https://api.github.com/repos/${gh.repo}/contents/${path}`, {
+      method: method || "GET", cache: "no-store",
+      headers: { Authorization: `Bearer ${gh.token}`, Accept: raw ? "application/vnd.github.raw+json" : "application/vnd.github+json", ...(body ? { "Content-Type": "application/json" } : {}) },
+      body: body ? JSON.stringify(body) : undefined
+    });
+  }
+  async function ghReadJson(path) {
+    const r = await ghApi(path, "GET", null, true);
+    if (r.status === 404) return null;
+    if (!r.ok) throw new Error(String(r.status));
+    return r.json();
+  }
+  async function ghWriteJson(path, obj, message) {
+    const body = { message, content: b64e(JSON.stringify(obj, null, 2) + "\n") };
+    const g = await ghApi(path);
+    if (g.ok) body.sha = (await g.json()).sha;
+    const r = await ghApi(path, "PUT", body);
+    if (!r.ok) throw new Error(String(r.status));
+  }
+
+  /* ---------- 작품 정보(썸네일·작품 번호·요일) 반영 ----------
+     깃허브 자동 작업이 metadata.json 에 적어 두면, 그걸 읽어서 목록에 채워 넣어요. */
+  const META_KEY = "webtoon-board-meta";
+  let meta = {};
+  try { meta = JSON.parse(localStorage.getItem(META_KEY) || "{}") || {}; } catch(e){}
+  const urlKey = u => String(u || "").split("#")[0];
+  const isDefaultTitle = it => !it.title || it.title === defaultTitle(it) || /^(네이버|시리즈|카카오)\s*\d*$/.test(it.title);
+
+  async function loadMeta() {
+    if (!gh) return;
+    try {
+      const j = await ghReadJson("metadata.json");
+      if (j && j.entries) {
+        meta = j.entries;
+        try { localStorage.setItem(META_KEY, JSON.stringify(meta)); } catch(e){}
+        applyMeta();
+      }
+    } catch (e) {}
+  }
+
+  function applyMeta() {
+    let changed = false;
+    items = items.map(it => {
+      const m = meta[urlKey(it.url)];
+      if (!m || !m.ok) return it;
+      const n = { ...it };
+      const set = (k, v) => { if (v !== undefined && JSON.stringify(n[k]) !== JSON.stringify(v)) { n[k] = v; changed = true; } };
+      if (m.thumbnail) set("thumbnail", m.thumbnail);
+      if (m.author) set("author", String(m.author).slice(0, 80));
+      if (!n.contentId && m.contentId) set("contentId", String(m.contentId));
+      if (m.title && isDefaultTitle(n)) set("title", String(m.title).slice(0, 60));
+      if ((!n.days || !n.days.length) && Array.isArray(m.days) && m.days.length) set("days", m.days);
+      // 연재 상태는 믿을 만한 정보만, 그리고 내가 직접 바꾼 뒤에 다시 확인된 경우에만 반영
+      const reliable = m.platform === "naver" || (m.platform === "series" && m.status === "done");
+      if (reliable && STATUS[m.status] !== undefined || (reliable && m.status === "ongoing")) {
+        if (m.status !== statusOf(n) && !(n.statusEdited && n.statusEdited > (m.checkedAt || 0) * 1000)) set("status", m.status);
+      }
+      return n;
+    });
+    // 같은 작품이 두 번 들어가 있으면 먼저 넣은 것만 남김 (짧은 주소는 작품 번호가 채워진 뒤에 알 수 있음)
+    const seen = new Set(); const before = items.length;
+    items = items.filter(it => { if (!it.contentId) return true; const k = it.platform + ":" + it.contentId; if (seen.has(k)) return false; seen.add(k); return true; });
+    if (items.length !== before) { changed = true; addMsg(`같은 작품 ${before - items.length}개를 하나로 합쳤어요.`); }
+    if (changed) persist();
+    if ($("sheet").hidden) render();
+  }
+
+  // 새로 넣은 작품이 있으면 자동 작업이 끝날 때쯤 몇 번 확인
+  let metaPolls = [];
+  function scheduleMetaPoll() {
+    if (!gh) return;
+    const waiting = items.some(it => { const m = meta[urlKey(it.url)]; return !m; });
+    if (!waiting) return;
+    metaPolls.forEach(clearTimeout);
+    metaPolls = [25, 50, 80, 120, 180].map(s => setTimeout(loadMeta, s * 1000));
+  }
+
+  /* ---------- 제목 검색 ---------- */
+  let searchRun = null, searchItems = [], searchPick = "all";
+  function setAddMode(m) {
+    document.querySelectorAll("#addMode button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.m === m)));
+    $("modePaste").hidden = m !== "paste"; $("modeSearch").hidden = m !== "search";
+    updateSearchAvail();
+    if (m === "search") setTimeout(() => $("searchQ").focus(), 30);
+  }
+  function updateSearchAvail() {
+    const ok = !!gh;
+    $("searchBtn").disabled = !ok || !!searchRun;
+    $("searchHelp").textContent = ok
+      ? "네이버웹툰·시리즈·카카오페이지에서 함께 찾아요. 깃허브가 대신 찾아오느라 결과가 나오기까지 30초~1분쯤 걸려요."
+      : (inClaude ? "제목 검색은 깃허브에 올린 알림판에서만 쓸 수 있어요." : "제목 검색은 아래 ‘깃허브 연결’을 먼저 해야 쓸 수 있어요.");
+  }
+  $("addMode").addEventListener("click", e => { const b = e.target.closest("button"); if (b) setAddMode(b.dataset.m); });
+
+  function searchState(text, err) { const m = $("searchState"); m.textContent = text; m.className = "msg" + (err ? " err" : ""); m.hidden = !text; }
+
+  $("searchForm").addEventListener("submit", async e => {
+    e.preventDefault();
+    const q = $("searchQ").value.trim();
+    if (!q || !gh || searchRun) return;
+    const id = uid();
+    searchRun = id; updateSearchAvail();
+    $("searchResults").replaceChildren(); $("searchFilter").hidden = true;
+    searchState("검색을 부탁하는 중…");
+    try { await ghWriteJson("search.json", { id, q, at: new Date().toISOString() }, "제목 검색: " + q); }
+    catch (err) { searchRun = null; updateSearchAvail(); searchState("검색을 부탁하지 못했어요. 깃허브 연결을 확인해 주세요.", true); return; }
+    const start = Date.now();
+    const tick = async () => {
+      if (searchRun !== id) return;
+      const sec = Math.round((Date.now() - start) / 1000);
+      searchState(`‘${q}’ 찾는 중… ${sec}초 (보통 30초~1분)`);
+      try {
+        const r = await ghReadJson("search-result.json");
+        if (r && r.id === id) { searchRun = null; updateSearchAvail(); showResults(r); return; }
+      } catch (err) {}
+      if (sec > 180) { searchRun = null; updateSearchAvail(); searchState("시간이 오래 걸리고 있어요. 잠시 뒤에 다시 찾아 주세요.", true); return; }
+      setTimeout(tick, 4000);
+    };
+    setTimeout(tick, 6000);
+  });
+
+  function showResults(r) {
+    searchItems = (r.results || []).filter(x => PNAME[x.platform] && /^https:\/\//.test(x.url || ""));
+    const failed = Object.keys(r.errors || {}).map(k => SHORT[k]).filter(Boolean);
+    if (!searchItems.length) { searchState(`‘${r.q}’ 검색 결과가 없어요.` + (failed.length ? ` (${failed.join("·")}은 가져오지 못했어요)` : ""), !!failed.length); $("searchFilter").hidden = true; $("searchResults").replaceChildren(); return; }
+    searchState(`‘${r.q}’ 검색 결과 ${searchItems.length}개` + (failed.length ? ` · ${failed.join("·")}은 가져오지 못했어요` : ""));
+    searchPick = "all";
+    renderResults();
+  }
+  function renderResults() {
+    const f = $("searchFilter"); f.replaceChildren(); f.hidden = false;
+    const count = p => searchItems.filter(x => p === "all" || x.platform === p).length;
+    for (const [k, label] of [["all", "전체"], ["naver", "네이버"], ["series", "시리즈"], ["kakao", "카카오"]]) {
+      if (k !== "all" && !count(k)) continue;
+      const b = el("button", "", `${label} ${count(k)}`); b.type = "button";
+      b.setAttribute("aria-pressed", String(searchPick === k));
+      b.addEventListener("click", () => { searchPick = k; renderResults(); });
+      f.append(b);
+    }
+    const box = $("searchResults"); box.replaceChildren();
+    const have = new Set(items.map(keyOf));
+    for (const x of searchItems.filter(x => searchPick === "all" || x.platform === searchPick)) {
+      const it = { platform: x.platform, contentId: String(x.contentId || ""), url: x.url, title: String(x.title || "").slice(0, 60), thumbnail: x.thumbnail || "", author: x.author || "" };
+      const row = el("div", "res");
+      row.append(coverEl(it));
+      const info = el("div", "info");
+      info.append(el("span", "title", it.title));
+      const sub = el("span", "sub");
+      sub.append(el("span", "ptag mini " + x.platform, SHORT[x.platform]));
+      sub.append(document.createTextNode([x.kind && x.kind !== "웹툰" ? x.kind : "", STATUS[x.status] || "", it.author].filter(Boolean).join(" · ")));
+      info.append(sub); row.append(info);
+      if (have.has(keyOf(it))) row.append(el("span", "added", "추가됨"));
+      else {
+        const b = el("button", "primary", "추가"); b.type = "button";
+        b.addEventListener("click", () => {
+          items.push({ ...it, id: uid(), days: Array.isArray(x.days) ? x.days : (typeof pick === "number" ? [pick] : []), status: STATUS[x.status] ? x.status : "ongoing", statusEdited: 0, addedAt: Date.now() });
+          persist(); render(); renderResults();
+          addMsg(`‘${it.title}’을 추가했어요.` + (Array.isArray(x.days) && x.days.length ? "" : " 연재 요일은 잠시 뒤 자동으로 채워지거나, ‘편집’에서 정할 수 있어요."));
+        });
+        row.append(b);
+      }
+      box.append(row);
+    }
   }
 
   $("ghForm").addEventListener("submit", async e => {
