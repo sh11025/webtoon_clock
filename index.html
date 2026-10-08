@@ -85,7 +85,9 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
 
 /* add + backup */
 .add{display:flex;gap:8px}
-.add input{flex:1;min-width:0}
+.add input,.add textarea{flex:1;min-width:0}
+.add textarea{font:inherit;color:var(--fg);background:var(--surface);border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;resize:vertical;min-height:48px}
+.add{align-items:flex-start}
 .head-actions{display:flex;gap:8px;align-items:center}
 .icon-btn{width:44px;height:44px;padding:0;border-radius:12px}
 .icon-btn svg{width:22px;height:22px}
@@ -172,10 +174,10 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
     <section class="set-sec">
       <h3>작품 추가</h3>
       <form class="add" id="addForm" autocomplete="off">
-        <input id="addUrl" type="url" inputmode="url" placeholder="작품 주소 붙여 넣기" aria-label="작품 주소">
+        <textarea id="addUrl" rows="2" placeholder="공유 글이나 작품 주소 붙여 넣기" aria-label="공유 글이나 작품 주소" autocapitalize="off" spellcheck="false"></textarea>
         <button class="primary" type="submit">추가</button>
       </form>
-      <p class="small">앱에서 ‘공유 → 링크 복사’ 후 붙여 넣어요. 여러 줄을 한 번에 넣어도 돼요.</p>
+      <p class="small">웹툰 앱에서 ‘공유’로 받은 글을 그대로 붙여 넣으면 제목도 자동으로 들어가요. 여러 작품을 한 번에 넣어도 돼요.</p>
       <div id="addMsg" class="msg" hidden></div>
     </section>
     <section class="set-sec" id="ghSec">
@@ -272,7 +274,15 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
   try { const u = JSON.parse(localStorage.getItem("webtoon-board-ui") || "{}"); if (PNAME[u.platform]) platform = u.platform; } catch(e){}
 
   /* 주소 해석 */
-  function parseUrl(raw) {
+  // 공유 글에 붙은 말("[네이버웹툰]", "출처 : 시리즈" 등)로 플랫폼 짐작
+  function hintPlatform(h) {
+    h = String(h || "");
+    if (/series|시리즈/i.test(h)) return "series";
+    if (/kakao|카카오/i.test(h)) return "kakao";
+    if (/naver|네이버/i.test(h)) return "naver";
+    return "";
+  }
+  function parseUrl(raw, hint) {
     let s = (raw || "").trim(); if (!s) return null;
     if (!/^https?:\/\//i.test(s)) s = "https://" + s;
     let u; try { u = new URL(s); } catch(e) { return null; }
@@ -280,7 +290,43 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
     if (/(^|\.)comic\.naver\.com$/.test(host)) return { platform: "naver", contentId: u.searchParams.get("titleId") || "", url: u.href };
     if (/(^|\.)series\.naver\.com$/.test(host)) return { platform: "series", contentId: u.searchParams.get("productNo") || "", url: u.href };
     if (/(^|\.)page\.kakao\.com$/.test(host)) { const m = u.pathname.match(/\/content\/(\d+)/); return { platform: "kakao", contentId: m ? m[1] : "", url: u.href }; }
+    if (/(^|\.)link-page\.kakao\.com$/.test(host)) return { platform: "kakao", contentId: u.searchParams.get("series_id") || "", url: u.href };
+    if (host === "naver.me") return { platform: hintPlatform(hint) || "series", contentId: "", url: u.href };
     return null;
+  }
+
+  // 앱 공유 글에서 주소와 제목을 함께 꺼냄
+  //  네이버웹툰: "[네이버웹툰] 제목" 다음 줄에 주소
+  //  카카오페이지: 주소 뒤 같은 줄에 "[카카오페이지 | 웹툰] 제목"
+  //  시리즈: "제목" / "출처 : 시리즈" 다음 줄에 주소
+  function parseShare(text) {
+    text = String(text || "").replace(/\r/g, "");
+    const re = /https?:\/\/[^\s<>"']+/g; const urls = []; let m;
+    while ((m = re.exec(text))) urls.push({ u: m[0].replace(/[)\].,]+$/, ""), s: m.index, e: m.index + m[0].length });
+    const out = []; let cursor = 0;
+    urls.forEach((x, i) => {
+      const nextS = i + 1 < urls.length ? urls[i + 1].s : text.length;
+      const after = text.slice(x.e, nextS);
+      const nl = after.indexOf("\n"); const sameLine = nl < 0 ? after : after.slice(0, nl);
+      let title = "", hint = "";
+      const am = sameLine.match(/^\s*\[([^\]]+)\]\s*(.+?)\s*$/);
+      if (am) { hint = am[1]; title = am[2]; cursor = x.e + sameLine.length; }
+      else {
+        const before = text.slice(cursor, x.s); cursor = x.e;
+        let lines = before.split("\n").map(l => l.trim()).filter(Boolean);
+        lines = lines.flatMap(l => { const k = l.search(/출처\s*[:：]/); return k > 0 ? [l.slice(0, k).trim(), l.slice(k)] : [l]; });
+        const src = lines.filter(l => /^출처\s*[:：]/.test(l)).pop(); if (src) hint = src;
+        const cand = lines.filter(l => !/^출처\s*[:：]/.test(l));
+        const last = cand[cand.length - 1] || "";
+        const bm = last.match(/^\[([^\]]+)\]\s*(.+)$/);
+        if (bm) { title = bm[2]; hint = hint || bm[1]; }
+        else if (last) title = last;
+      }
+      const p = parseUrl(x.u, hint);
+      if (p) out.push({ ...p, title: title.replace(/\s+/g, " ").trim().slice(0, 60) });
+    });
+    if (!out.length) { const p = parseUrl(text.trim()); if (p) out.push({ ...p, title: "" }); }
+    return out;
   }
   const keyOf = it => it.contentId ? it.platform + ":" + it.contentId : it.url;
   const uid = () => "w" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -387,7 +433,7 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
     draft = it;
     $("sheetTitle").textContent = editingId ? "작품 수정" : "작품 추가";
     showPlat(it.platform);
-    $("fTitle").value = editingId ? it.title : "";
+    $("fTitle").value = it.title || "";
     $("fUrl").value = it.url;
     document.querySelectorAll("#fDays button").forEach(b => b.setAttribute("aria-pressed", String((it.days || []).includes(Number(b.dataset.d)))));
     setStatus(statusOf(it));
@@ -412,7 +458,7 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
 
   $("editForm").addEventListener("submit", e => {
     e.preventDefault();
-    const p = parseUrl($("fUrl").value);
+    const p = parseUrl($("fUrl").value, draft.platform);
     if (!p) { $("fUrl").focus(); return; }
     const sBtn = document.querySelector("#fStatus button[aria-pressed='true']");
     const next = {
@@ -435,8 +481,7 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
   $("addForm").addEventListener("submit", e => {
     e.preventDefault();
     const raw = $("addUrl").value;
-    const found = extractUrls(raw).map(parseUrl).filter(Boolean);
-    if (!found.length) { const one = parseUrl(raw); if (one) found.push(one); }
+    const found = parseShare(raw);
     if (!found.length) { addMsg("네이버웹툰, 네이버 시리즈, 카카오페이지 주소를 붙여 넣어 주세요.", true); return; }
     const existing = new Set(items.map(keyOf));
     if (found.length === 1) {
@@ -444,29 +489,29 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
       if (existing.has(keyOf(p))) { addMsg("이미 있는 작품이에요.", true); return; }
       $("addUrl").value = "";
       closeSettings();
-      openSheet({ ...p, id: uid(), title: "", days: typeof pick === "number" ? [pick] : [], status: typeof pick === "string" ? pick : "ongoing", addedAt: Date.now() });
+      openSheet({ ...p, id: uid(), title: p.title || "", days: typeof pick === "number" ? [pick] : [], status: typeof pick === "string" ? pick : "ongoing", addedAt: Date.now() });
       return;
     }
     let added = 0;
     for (const p of found) {
       if (existing.has(keyOf(p))) continue;
       existing.add(keyOf(p));
-      items.push({ ...p, id: uid(), title: defaultTitle(p), days: [], status: "ongoing", addedAt: Date.now() + added });
+      items.push({ ...p, id: uid(), title: p.title || defaultTitle(p), days: [], status: "ongoing", addedAt: Date.now() + added });
       added++;
     }
     $("addUrl").value = "";
     persist(); render();
-    addMsg(`${added}개를 추가했어요. ‘편집’에서 제목과 요일을 정해 주세요.`);
+    addMsg(`${added}개를 추가했어요. ‘편집’에서 요일을 정해 주세요.`);
   });
-  $("addUrl").addEventListener("paste", e => {
-    const t = e.clipboardData?.getData("text") || "";
-    if (/\n/.test(t.trim())) { e.preventDefault(); $("addUrl").value = t.replace(/\s+/g, " ").trim(); }
+  // 한 줄짜리 입력처럼 Enter로 바로 추가 (Shift+Enter는 줄바꿈)
+  $("addUrl").addEventListener("keydown", e => {
+    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("addForm").requestSubmit(); }
   });
 
   /* 저장 */
   function clean(list) {
     return list.filter(x => x && typeof x.url === "string").map(x => {
-      const p = parseUrl(x.url); if (!p) return null;
+      const p = parseUrl(x.url, x.platform); if (!p) return null;
       return {
         id: typeof x.id === "string" ? x.id : uid(),
         url: p.url, platform: p.platform, contentId: p.contentId,
@@ -689,7 +734,7 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
       const arr = Array.isArray(j) ? j : Array.isArray(j.items) ? j.items : null;
       if (arr) list = clean(arr.map(x => typeof x === "string" ? { url: x } : x));
     } catch (e) {}
-    if (!list) list = clean(extractUrls(text).map(u => ({ url: u })));
+    if (!list) list = clean(parseShare(text));
     const box = $("importAsk"); box.replaceChildren(); box.hidden = false; box.className = "msg";
     if (!list.length) { box.className = "msg err"; box.textContent = "파일에서 작품 주소를 찾지 못했어요."; return; }
     pendingImport = list;
