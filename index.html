@@ -113,7 +113,9 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
 .add textarea{font:inherit;color:var(--fg);background:var(--surface);border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;resize:vertical;min-height:48px}
 .add{align-items:flex-start}
 .head-actions{display:flex;gap:8px;align-items:center}
-.icon-btn{width:44px;height:44px;padding:0;border-radius:12px}
+.icon-btn{width:44px;height:44px;padding:0;border-radius:12px;position:relative}
+.icon-btn.alert::after{content:"";position:absolute;top:7px;right:7px;width:9px;height:9px;border-radius:50%;background:var(--danger)}
+.small.warn{color:var(--danger);font-weight:700}
 .icon-btn svg{width:22px;height:22px}
 .set-sec{display:flex;flex-direction:column;gap:10px;padding-top:14px;border-top:1px solid var(--line)}
 .set-sec h3{margin:0;font-size:.95rem}
@@ -230,10 +232,17 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
       </div>
       <div id="addMsg" class="msg" hidden></div>
     </section>
+    <section class="set-sec">
+      <h3>정렬</h3>
+      <div class="seg2" id="sortMode">
+        <button type="button" data-s="title" aria-pressed="true">가나다순</button>
+        <button type="button" data-s="recent" aria-pressed="false">최근 추가순</button>
+      </div>
+    </section>
     <section class="set-sec" id="ghSec">
       <h3>깃허브 연결</h3>
       <p class="small" id="ghIntro">목록을 깃허브 비공개 보관함에 저장해서 휴대폰과 태블릿이 같은 목록을 보게 해요.</p>
-      <p class="small" id="ghInClaude" hidden>깃허브 연결은 깃허브에 올린 알림판에서만 쓸 수 있어요. 이 화면(Claude 안)에서는 목록이 Claude 계정에 저장돼요.</p>
+      <p class="small" id="ghInClaude" hidden>이 화면은 미리보기용이에요. 목록은 이 기기에만 저장돼요. 깃허브 연결과 제목 검색은 깃허브에 올린 알림판에서 쓰세요.</p>
       <form id="ghForm" autocomplete="off">
         <div class="field">
           <label for="ghRepo">목록 보관함</label>
@@ -243,12 +252,26 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
           <label for="ghToken">열쇠</label>
           <input id="ghToken" type="password" placeholder="github_pat_..." autocapitalize="off" spellcheck="false">
         </div>
+        <div class="field">
+          <label for="ghExp">열쇠 기한 (선택)</label>
+          <input id="ghExp" type="date">
+        </div>
         <button class="primary" type="submit">연결</button>
       </form>
       <div id="ghOn" hidden>
         <div class="gh-status" id="ghStatus"><i></i><span></span></div>
+        <div class="field" style="margin-top:12px">
+          <label for="ghExpOn">열쇠 기한</label>
+          <input id="ghExpOn" type="date">
+          <p class="small" id="ghExpInfo"></p>
+        </div>
+        <form id="ghKeyForm" class="add" autocomplete="off" hidden style="margin-top:10px">
+          <input id="ghNewToken" type="password" placeholder="새 열쇠 github_pat_..." aria-label="새 열쇠" autocapitalize="off" spellcheck="false">
+          <button class="primary" type="submit">바꾸기</button>
+        </form>
         <div class="row" style="margin-top:10px">
           <button type="button" id="ghPullBtn">지금 불러오기</button>
+          <button type="button" id="ghKeyBtn">열쇠 바꾸기</button>
           <button type="button" class="danger" id="ghOff">연결 끊기</button>
         </div>
       </div>
@@ -322,9 +345,11 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
   let pick = new Date().getDay();   // 요일 숫자, "paused", "done", 또는 null(전체)
   let editMode = false;
   let editingId = null, draft = null;
-  let docRef = null, pendingImport = null;
+  let pendingImport = null;
+  let sortBy = "title";   // "title"(가나다순) 또는 "recent"(최근 추가순)
 
-  try { const u = JSON.parse(localStorage.getItem("webtoon-board-ui") || "{}"); if (PNAME[u.platform]) platform = u.platform; } catch(e){}
+  try { const u = JSON.parse(localStorage.getItem("webtoon-board-ui") || "{}"); if (PNAME[u.platform]) platform = u.platform; if (u.sort === "recent") sortBy = "recent"; } catch(e){}
+  const saveUi = () => { try { localStorage.setItem("webtoon-board-ui", JSON.stringify({ platform, sort: sortBy })); } catch(e){} };
 
   /* 주소 해석 */
   // 공유 글에 붙은 말("[네이버웹툰]", "출처 : 시리즈" 등)로 플랫폼 짐작
@@ -388,9 +413,9 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
   const statusOf = it => STATUS[it.status] ? it.status : "ongoing";
 
   /* 요일 + 휴재/완결 버튼 */
+  let today = new Date().getDay();
   function buildFilter() {
     const wrap = $("dayChips"); wrap.replaceChildren();
-    const today = new Date().getDay();
     for (const d of ORDER) {
       const b = el("button", d === today ? "today" : "", DAY[d]);
       b.type = "button"; b.dataset.v = d;
@@ -408,6 +433,16 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
     });
   }
   buildFilter();
+  // 켜 둔 채로 자정이 지나면 '오늘' 표시와 선택을 새 요일로 옮김
+  function checkToday() {
+    const d = new Date().getDay(); if (d === today) return;
+    const wasToday = pick === today;
+    today = d;
+    document.querySelectorAll("#dayChips button").forEach(b => b.classList.toggle("today", b.dataset.v === String(d)));
+    if (wasToday) { pick = d; if ($("sheet").hidden) render(); }
+  }
+  setInterval(checkToday, 60000);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) checkToday(); });
 
   (function buildSheetDays() {
     const wrap = $("fDays");
@@ -440,7 +475,9 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
         if (typeof pick === "string") return st === pick;
         return st === "ongoing" && (it.days || []).includes(pick);
       })
-      .sort((a, b) => rank[statusOf(a)] - rank[statusOf(b)] || a.title.localeCompare(b.title, "ko"));
+      .sort((a, b) => rank[statusOf(a)] - rank[statusOf(b)]
+        || (sortBy === "recent" ? (b.addedAt || 0) - (a.addedAt || 0) : 0)
+        || a.title.localeCompare(b.title, "ko"));
 
     if (!view.length) {
       const name = SHORT[platform];
@@ -494,10 +531,16 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
   $("tabs").addEventListener("click", e => {
     const b = e.target.closest("button"); if (!b) return;
     platform = b.dataset.p;
-    try { localStorage.setItem("webtoon-board-ui", JSON.stringify({ platform })); } catch(e){}
+    saveUi();
     render();
   });
   $("editToggle").addEventListener("click", () => { editMode = !editMode; render(); });
+  const showSort = () => document.querySelectorAll("#sortMode button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.s === sortBy)));
+  showSort();
+  $("sortMode").addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b) return;
+    sortBy = b.dataset.s; showSort(); saveUi(); render();
+  });
 
   /* 설정 창 */
   function openSettings() { $("settings").hidden = false; }
@@ -611,20 +654,9 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
       };
     }).filter(Boolean);
   }
-  let writing = false, dirty = false, t = null;
   function persist() {
     try { localStorage.setItem(LS_KEY, JSON.stringify(items)); } catch(e){}
     ghQueue();
-    if (!docRef) return;
-    dirty = true; clearTimeout(t); t = setTimeout(flush, 600);
-  }
-  async function flush() {
-    if (writing || !dirty || !docRef) return;
-    writing = true; dirty = false;
-    try { await docRef.set({ items, updatedAt: Date.now() }); }
-    catch (e) { if (e && e.code === "unavailable") { dirty = true; setTimeout(flush, 1500 + Math.random() * 1000); } }
-    writing = false;
-    if (dirty) flush();
   }
 
   try { const s = localStorage.getItem(LS_KEY); if (s) items = clean(JSON.parse(s)); } catch(e){}
@@ -641,8 +673,35 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
   const b64d = str => new TextDecoder().decode(Uint8Array.from(atob(str.replace(/\s/g, "")), c => c.charCodeAt(0)));
   const nowClock = () => { const d = new Date(); return d.getHours() + ":" + String(d.getMinutes()).padStart(2, "0"); };
 
+  // 열쇠 기한: 남은 날짜 계산 (기한 날 하루 끝까지 쓸 수 있다고 봄)
+  const daysLeft = ymd => { if (!/^\d{4}-\d{2}-\d{2}$/.test(ymd || "")) return null; const [y, m, d] = ymd.split("-").map(Number); const end = new Date(y, m - 1, d); const now = new Date(); now.setHours(0, 0, 0, 0); return Math.round((end - now) / 86400000); };
+  const ymdText = ymd => { const [y, m, d] = ymd.split("-").map(Number); return `${y}년 ${m}월 ${d}일`; };
+  let ghAuthBad = false;
+  const ghAlert = () => { const l = gh ? daysLeft(gh.expires) : null; $("settingsBtn").classList.toggle("alert", !!gh && (ghAuthBad || (l !== null && l <= 14))); };
+  function ghExpShow() {
+    ghAlert();
+    const info = $("ghExpInfo"); if (!gh) return;
+    $("ghExpOn").value = gh.expires || "";
+    const left = daysLeft(gh.expires);
+    info.className = "small";
+    if (left === null) info.textContent = "열쇠를 만들 때 정한 기한을 적어 두면, 끝나기 전에 알려 드려요.";
+    else if (left < 0) { info.textContent = `${ymdText(gh.expires)}에 기한이 끝났어요. 새 열쇠를 만들어 ‘열쇠 바꾸기’로 넣어 주세요.`; info.className = "small warn"; }
+    else if (left <= 14) { info.textContent = left === 0 ? "오늘이 열쇠 기한 마지막 날이에요. 새 열쇠를 만들어 ‘열쇠 바꾸기’로 넣어 주세요." : `열쇠 기한이 ${left}일 남았어요 (${ymdText(gh.expires)}). 새 열쇠를 미리 만들어 두세요.`; info.className = "small warn"; }
+    else info.textContent = `${ymdText(gh.expires)}까지 쓸 수 있어요 (${left}일 남음).`;
+  }
+  function ghSaveConf() { try { localStorage.setItem(GH_KEY, JSON.stringify(gh)); } catch(e){} }
+  // 깃허브가 기한을 알려 주면 자동으로 적어 둠
+  function ghReadExpiry(r) {
+    try {
+      const h = r.headers.get("github-authentication-token-expiration"); if (!h || !gh) return;
+      const m = h.match(/^(\d{4}-\d{2}-\d{2})/); if (!m || gh.expires === m[1]) return;
+      gh.expires = m[1]; if (localStorage.getItem(GH_KEY)) ghSaveConf(); ghExpShow();
+    } catch(e){}
+  }
+
   function ghShow() {
     if (typeof updateSearchAvail === "function") try { updateSearchAvail(); } catch(e){}
+    ghExpShow(); $("ghKeyForm").hidden = true;
     $("ghIntro").hidden = inClaude; $("ghInClaude").hidden = !inClaude;
     $("ghForm").hidden = inClaude || !!gh;
     $("ghOn").hidden = inClaude || !gh;
@@ -650,18 +709,27 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
   }
   function ghSet(text, err) {
     const st = $("ghStatus"); st.className = "gh-status" + (err ? " err" : ""); st.querySelector("span").textContent = text;
+    if (!err && /연결됨|저장됨/.test(text)) ghAuthBad = false;
+    ghAlert();
   }
   function ghErr(text) { const m = $("ghMsg"); m.textContent = text; m.hidden = !text; }
 
   async function ghReq(method, body) {
-    return fetch(`https://api.github.com/repos/${gh.repo}/contents/list.json`, {
+    const r = await fetch(`https://api.github.com/repos/${gh.repo}/contents/list.json`, {
       method, cache: "no-store",
       headers: { Authorization: `Bearer ${gh.token}`, Accept: "application/vnd.github+json", ...(body ? { "Content-Type": "application/json" } : {}) },
       body: body ? JSON.stringify(body) : undefined
     });
+    ghReadExpiry(r);
+    return r;
   }
   function ghFail(status) {
-    if (status === 401) return "열쇠가 맞지 않아요. 열쇠를 다시 확인해 주세요.";
+    ghAuthBad = status === 401 || status === 403 || status === 404;
+    if (status === 401) {
+      const left = gh ? daysLeft(gh.expires) : null;
+      if (left !== null && left < 0) return "열쇠 기한이 끝났어요. 새 열쇠를 만들어 ‘열쇠 바꾸기’로 넣어 주세요.";
+      return "열쇠가 맞지 않거나 기한이 끝났어요. 새 열쇠를 만들어 ‘열쇠 바꾸기’로 넣어 주세요.";
+    }
     if (status === 403) return "열쇠에 이 보관함을 쓸 권한이 없어요. 열쇠 설정에서 ‘Contents: Read and write’를 켜 주세요.";
     if (status === 404) return "보관함을 찾지 못했어요. 이름(아이디/보관함)과 열쇠의 보관함 선택을 확인해 주세요.";
     return "연결에 실패했어요. 인터넷 연결을 확인해 주세요.";
@@ -902,17 +970,40 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
     if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) { ghErr("보관함은 ‘아이디/보관함이름’ 모양으로 적어 주세요."); $("ghRepo").focus(); return; }
     if (token.length < 20) { ghErr("열쇠를 붙여 넣어 주세요."); $("ghToken").focus(); return; }
     gh = { repo, token }; ghSha = null;
-    $("ghForm").hidden = true; $("ghOn").hidden = false;
+    if (daysLeft($("ghExp").value) !== null) gh.expires = $("ghExp").value;
+    $("ghForm").hidden = true; $("ghOn").hidden = false; ghExpShow();
     const ok = await ghPull(true);
     if (ok && gh) {
-      try { localStorage.setItem(GH_KEY, JSON.stringify(gh)); } catch(e){}
-      $("ghToken").value = "";
+      ghSaveConf();
+      $("ghToken").value = ""; $("ghExp").value = "";
     } else {
       const msg = $("ghStatus").textContent;
       gh = null; ghShow(); ghErr(msg || "연결에 실패했어요.");
     }
   });
   $("ghPullBtn").addEventListener("click", () => ghPull(false));
+  $("ghExpOn").addEventListener("change", () => {
+    if (!gh) return;
+    const v = $("ghExpOn").value;
+    if (daysLeft(v) !== null) gh.expires = v; else delete gh.expires;
+    ghSaveConf(); ghExpShow();
+  });
+  $("ghKeyBtn").addEventListener("click", () => { const f = $("ghKeyForm"); f.hidden = !f.hidden; if (!f.hidden) $("ghNewToken").focus(); });
+  $("ghKeyForm").addEventListener("submit", async e => {
+    e.preventDefault(); ghErr("");
+    const token = $("ghNewToken").value.trim();
+    if (token.length < 20) { ghErr("새 열쇠를 붙여 넣어 주세요."); return; }
+    const old = { ...gh };
+    gh.token = token; delete gh.expires;
+    const ok = await ghPull(false);
+    if (ok && gh) {
+      ghSaveConf(); $("ghNewToken").value = ""; $("ghKeyForm").hidden = true; ghExpShow();
+      ghErr(""); if (!gh.expires) $("ghExpInfo").textContent = "열쇠를 바꿨어요. 새 열쇠의 기한을 위에 적어 두세요.";
+    } else {
+      const msg = $("ghStatus").textContent;
+      gh = old; ghExpShow(); ghErr("새 열쇠로 연결하지 못했어요. " + (msg || ""));
+    }
+  });
   $("ghOff").addEventListener("click", () => {
     const b = $("ghOff");
     if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "한 번 더 누르면 끊겨요"; return; }
@@ -926,52 +1017,20 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
   ghShow();
   if (gh) ghPull(false);
 
-  (async () => {
-    try {
-      if (!window.claude?.use) return;
-      const [db, user] = await Promise.all([claude.use("db"), claude.use("user")]);
-      const id = user ? await user.id() : null;
-      if (!db || !id) return;
-      docRef = db.doc("data/users/" + id + "/list");
-      let first = true;
-      docRef.onSnapshot(snap => {
-        const data = snap.exists ? snap.data() : null;
-        if (data && Array.isArray(data.items)) {
-          if (!snap.metadata.hasPendingWrites && !writing && !dirty) {
-            items = clean(data.items);
-            try { localStorage.setItem(LS_KEY, JSON.stringify(items)); } catch(e){}
-            if ($("sheet").hidden) render();
-          }
-        } else if (first && items.length) persist();
-        first = false;
-      }, () => {});
-    } catch (e) {}
-  })();
-
   /* 내보내기 / 가져오기 */
-  $("exportBtn").addEventListener("click", async () => {
+  $("exportBtn").addEventListener("click", () => {
     const d = new Date(), p = n => String(n).padStart(2, "0");
     const filename = `webtoon-list-${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}.json`;
     const data = JSON.stringify({ app: "webtoon-board", version: 3, exportedAt: d.toISOString(), items }, null, 2);
-    // Claude 밖(일반 브라우저)에서 열었을 때는 브라우저가 바로 파일을 내려받게 함
-    if (!window.claude?.use) {
-      try {
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(new Blob([data], { type: "application/json" }));
-        a.download = filename; document.body.append(a); a.click(); a.remove();
-        setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-        return;
-      } catch (e) { $("exportText").value = data; $("exportFallback").hidden = false; return; }
-    }
+    // Claude 미리보기에서는 파일 저장이 막혀 있으니 복사용 칸을 보여 줌
+    if (inClaude) { $("exportText").value = data; $("exportFallback").hidden = false; return; }
     try {
-      const dl = await claude.use("downloads");
-      if (!dl) throw { code: "unavailable" };
-      await dl.save({ filename, data });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([data], { type: "application/json" }));
+      a.download = filename; document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
       $("exportFallback").hidden = true;
-    } catch (e) {
-      if (e && (e.code === "declined" || e.code === "rate_limited")) return;
-      $("exportText").value = data; $("exportFallback").hidden = false;
-    }
+    } catch (e) { $("exportText").value = data; $("exportFallback").hidden = false; }
   });
   $("copyExport").addEventListener("click", async () => {
     try { await navigator.clipboard.writeText($("exportText").value); $("copyExport").textContent = "복사했어요"; }
