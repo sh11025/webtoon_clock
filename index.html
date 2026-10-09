@@ -215,10 +215,11 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
       </div>
       <div id="modePaste" style="display:flex;flex-direction:column;gap:10px">
         <form class="add" id="addForm" autocomplete="off">
-          <textarea id="addUrl" rows="2" placeholder="공유 글이나 작품 주소 붙여 넣기" aria-label="공유 글이나 작품 주소" autocapitalize="off" spellcheck="false"></textarea>
+          <textarea id="addUrl" rows="3" placeholder="공유 글이나 작품 주소 붙여 넣기&#10;여러 개는 한 줄에 하나씩" aria-label="공유 글이나 작품 주소" autocapitalize="off" spellcheck="false"></textarea>
           <button class="primary" type="submit">추가</button>
         </form>
-        <p class="small">웹툰 앱에서 ‘공유’로 받은 글을 그대로 붙여 넣으면 제목도 자동으로 들어가요. 여러 작품을 한 번에 넣어도 돼요.</p>
+        <p class="small" id="addCount" hidden></p>
+        <p class="small">웹툰 앱에서 ‘공유’로 받은 글을 그대로 붙여 넣으면 제목도 들어가요. 여러 개는 <b>한 줄에 하나씩</b> 넣으면 되고, 네이버웹툰·시리즈·카카오페이지를 섞어도 돼요. 엔터는 줄바꿈이에요. 다 넣었으면 ‘추가’를 눌러 주세요.</p>
       </div>
       <div id="modeSearch" hidden style="display:flex;flex-direction:column;gap:10px">
         <form class="add" id="searchForm" autocomplete="off">
@@ -379,8 +380,9 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
   //  시리즈: "제목" / "출처 : 시리즈" 다음 줄에 주소
   function parseShare(text) {
     text = String(text || "").replace(/\r/g, "");
-    const re = /https?:\/\/[^\s<>"']+/g; const urls = []; let m;
-    while ((m = re.exec(text))) urls.push({ u: m[0].replace(/[)\].,]+$/, ""), s: m.index, e: m.index + m[0].length });
+    // 주소는 영문·숫자·기호까지만, 쉼표·세미콜론·한글 앞이나 다음 "http" 앞에서 끊음 → 쉼표/슬래시/붙여 쓰기도 각각 인식
+    const re = /https?:\/\/[A-Za-z0-9\-._~:/?#@!$&*+=%]+?(?=https?:\/\/|[^A-Za-z0-9\-._~:/?#@!$&*+=%]|$)/g; const urls = []; let m;
+    while ((m = re.exec(text))) urls.push({ u: m[0].replace(/\.+$/, "").replace(/(\?.*?)\/+$/, "$1"), s: m.index, e: m.index + m[0].length });
     const out = []; let cursor = 0;
     urls.forEach((x, i) => {
       const nextS = i + 1 < urls.length ? urls[i + 1].s : text.length;
@@ -401,6 +403,8 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
         else if (last) title = last;
       }
       const p = parseUrl(x.u, hint);
+      title = title.replace(/^[\s,;/|·\-]+|[\s,;/|·\-]+$/g, "");
+      if (!/[\p{L}\p{N}]/u.test(title)) title = "";   // "/" "," 같은 기호만 있으면 제목 아님
       if (p) out.push({ ...p, title: title.replace(/\s+/g, " ").trim().slice(0, 60) });
     });
     if (!out.length) { const p = parseUrl(text.trim()); if (p) out.push({ ...p, title: "" }); }
@@ -534,7 +538,10 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
     saveUi();
     render();
   });
-  $("editToggle").addEventListener("click", () => { editMode = !editMode; render(); });
+  $("editToggle").addEventListener("click", () => {
+    editMode = !editMode; render();
+    if (!editMode && typeof ghDirty !== "undefined" && ghDirty) { clearTimeout(ghTimer); ghPush(); }
+  });
   const showSort = () => document.querySelectorAll("#sortMode button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.s === sortBy)));
   showSort();
   $("sortMode").addEventListener("click", e => {
@@ -612,30 +619,58 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
     const raw = $("addUrl").value;
     const found = parseShare(raw);
     if (!found.length) { addMsg("네이버웹툰, 네이버 시리즈, 카카오페이지 주소를 붙여 넣어 주세요.", true); return; }
-    const existing = new Set(items.map(keyOf));
+    const dupOf = isDupFactory(items);
     if (found.length === 1) {
       const p = found[0];
-      if (existing.has(keyOf(p))) { addMsg("이미 있는 작품이에요.", true); return; }
-      $("addUrl").value = "";
+      if (dupOf(p)) { addMsg(`이미 있는 작품이에요${dupOf(p).title ? " (" + dupOf(p).title + ")" : ""}.`, true); return; }
+      $("addUrl").value = ""; showCount();
       closeSettings();
-      openSheet({ ...p, id: uid(), title: p.title || "", days: typeof pick === "number" ? [pick] : [], status: typeof pick === "string" ? pick : "ongoing", addedAt: Date.now() });
+      openSheet({ ...p, id: uid(), title: p.title || "", days: typeof pick === "number" ? [pick] : [], status: STATUS[pick] ? pick : "ongoing", addedAt: Date.now() });
       return;
     }
-    let added = 0;
+    let added = 0; const skipped = [];
     for (const p of found) {
-      if (existing.has(keyOf(p))) continue;
-      existing.add(keyOf(p));
-      items.push({ ...p, id: uid(), title: p.title || defaultTitle(p), days: [], status: "ongoing", addedAt: Date.now() + added });
+      const d = dupOf(p);
+      if (d) { skipped.push(d.title || p.title || defaultTitle(p)); continue; }
+      const it = { ...p, id: uid(), title: p.title || defaultTitle(p), days: [], status: "ongoing", addedAt: Date.now() + added };
+      items.push(it); dupOf.add(it);
       added++;
     }
-    $("addUrl").value = "";
-    persist(); render();
-    addMsg(`${added}개를 추가했어요. ‘편집’에서 요일을 정해 주세요.`);
+    $("addUrl").value = ""; showCount();
+    if (added) { persist(); render(); }
+    let msg = `${found.length}개 찾았어요 (${countText(found)}). `;
+    msg += added ? `${added}개를 추가했어요.` : "새로 추가할 작품이 없어요.";
+    if (skipped.length) msg += ` 이미 있는 ${skipped.length}개는 뺐어요: ${skipped.slice(0, 3).join(", ")}${skipped.length > 3 ? " 외" : ""}.`;
+    addMsg(msg, !added);
   });
-  // 한 줄짜리 입력처럼 Enter로 바로 추가 (Shift+Enter는 줄바꿈)
-  $("addUrl").addEventListener("keydown", e => {
-    if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("addForm").requestSubmit(); }
-  });
+  // 같은 작품 찾기: 플랫폼+작품 번호가 같거나, 번호를 아직 모르면 같은 주소 또는 같은 제목
+  const normTitle = t => String(t || "").replace(/[\s\[\](){}<>.,!?~:;'"·\-]/g, "").toLowerCase();
+  function isDupFactory(list) {
+    const keys = new Map(), titles = new Map();
+    const add = it => {
+      keys.set(keyOf(it), it); keys.set(it.platform + "|" + urlKey(it.url), it);
+      if (it.title && it.title !== defaultTitle(it)) titles.set(it.platform + "|" + normTitle(it.title), it);
+    };
+    list.forEach(add);
+    const f = p => {
+      const hit = keys.get(keyOf(p)) || keys.get(p.platform + "|" + urlKey(p.url));
+      if (hit) return hit;
+      // 제목 비교는 네이버웹툰·카카오만 (시리즈는 소설판과 만화판 제목이 같을 수 있어서)
+      if (!p.title || p.platform === "series") return null;
+      const t = titles.get(p.platform + "|" + normTitle(p.title));
+      return t && (!p.contentId || !t.contentId || t.contentId === p.contentId) ? t : null;
+    };
+    f.add = add;
+    return f;
+  }
+  const countText = list => ["naver", "series", "kakao"].map(pl => [pl, list.filter(x => x.platform === pl).length]).filter(x => x[1]).map(([pl, n]) => `${SHORT[pl]} ${n}`).join(", ");
+  // 붙여 넣는 동안 몇 개를 알아봤는지 바로 보여 줌 (따로 확인 누를 필요 없음)
+  function showCount() {
+    const box = $("addCount"); const found = $("addUrl").value.trim() ? parseShare($("addUrl").value) : [];
+    box.hidden = found.length < 2;
+    if (found.length >= 2) box.textContent = `${found.length}개 찾았어요 (${countText(found)})`;
+  }
+  $("addUrl").addEventListener("input", showCount);
 
   /* 저장 */
   function clean(list) {
@@ -665,6 +700,7 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
   /* ---------- 깃허브 연결 (깃허브에 올린 알림판에서만) ---------- */
   const GH_KEY = "webtoon-board-gh";
   const inClaude = !!window.claude || /claude/i.test(location.hostname);
+  let ghLastPull = Date.now();
   let gh = null, ghSha = null, ghBusy = false, ghDirty = false, ghTimer = null;
   try { gh = JSON.parse(localStorage.getItem(GH_KEY) || "null"); } catch(e){}
   if (inClaude) gh = null;
@@ -758,10 +794,13 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
         try { localStorage.setItem(LS_KEY, JSON.stringify(items)); } catch(e){}
         if (extra.length) { ghDirty = true; ghPush(); }
       } else {
+        const same = JSON.stringify(remote) === JSON.stringify(items);
         items = remote;
         try { localStorage.setItem(LS_KEY, JSON.stringify(items)); } catch(e){}
+        if (same) merge = "same";
       }
-      if ($("sheet").hidden) render();
+      ghLastPull = Date.now();
+      if ($("sheet").hidden && merge !== "same") render();
       ghSet(`연결됨 · ${nowClock()}에 불러옴`);
       loadMeta();
       return true;
@@ -790,9 +829,11 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
     ghBusy = false;
     if (ghDirty && navigator.onLine !== false) { clearTimeout(ghTimer); ghTimer = setTimeout(ghPush, 4000); }
   }
+  // 저장은 모아서 한 번: 편집 중이면 ‘완료’를 누를 때, 아니면 잠깐 뒤에 한 번. 앱을 닫거나 다른 앱으로 갈 때도 남은 게 있으면 저장.
   function ghQueue() {
     if (!gh) return;
-    ghDirty = true; clearTimeout(ghTimer); ghTimer = setTimeout(ghPush, 800);
+    ghDirty = true; clearTimeout(ghTimer);
+    if (!editMode) ghTimer = setTimeout(ghPush, 2000);
   }
 
   /* ---------- 깃허브 보관함의 다른 파일 읽고 쓰기 ---------- */
@@ -858,7 +899,16 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
     });
     // 같은 작품이 두 번 들어가 있으면 먼저 넣은 것만 남김 (짧은 주소는 작품 번호가 채워진 뒤에 알 수 있음)
     const seen = new Set(); const before = items.length;
-    items = items.filter(it => { if (!it.contentId) return true; const k = it.platform + ":" + it.contentId; if (seen.has(k)) return false; seen.add(k); return true; });
+    const keep = new Map();
+    items = items.filter(it => {
+      if (!it.contentId) return true;
+      const k = it.platform + ":" + it.contentId, first = keep.get(k);
+      if (!first) { keep.set(k, it); return true; }
+      // 지우는 쪽에만 요일·상태를 정해 뒀으면 남는 쪽으로 옮김
+      if ((!first.days || !first.days.length) && it.days && it.days.length) first.days = it.days;
+      if ((it.statusEdited || 0) > (first.statusEdited || 0)) { first.status = it.status; first.statusEdited = it.statusEdited; }
+      return false;
+    });
     if (items.length !== before) { changed = true; addMsg(`같은 작품 ${before - items.length}개를 하나로 합쳤어요.`); }
     if (changed) persist();
     if ($("sheet").hidden) render();
@@ -871,7 +921,7 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
     const waiting = items.some(it => { const m = meta[urlKey(it.url)]; return !m; });
     if (!waiting) return;
     metaPolls.forEach(clearTimeout);
-    metaPolls = [25, 50, 80, 120, 180].map(s => setTimeout(loadMeta, s * 1000));
+    metaPolls = [90, 180].map(s => setTimeout(loadMeta, s * 1000));   // 조용히 두 번만 확인
   }
 
   /* ---------- 제목 검색 ---------- */
@@ -1011,7 +1061,12 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
     try { localStorage.removeItem(GH_KEY); } catch(e){}
     ghShow();
   });
-  document.addEventListener("visibilitychange", () => { if (!document.hidden && gh) ghPull(false); });
+  // 불러오기는 켤 때 한 번. 다만 앱을 띄워 둔 채 6시간 넘게 지났다가 다시 보면 한 번 더 불러옴
+  document.addEventListener("visibilitychange", () => {
+    if (!gh) return;
+    if (document.hidden) { if (ghDirty) { clearTimeout(ghTimer); ghPush(); } return; }
+    if (Date.now() - ghLastPull > 6 * 3600 * 1000) ghPull(false);
+  });
   window.addEventListener("online", () => { if (gh && ghDirty) ghPush(); });
 
   ghShow();
