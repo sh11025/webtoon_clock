@@ -677,7 +677,8 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
     return list.filter(x => x && typeof x.url === "string").map(x => {
       const p = parseUrl(x.url, x.platform); if (!p) return null;
       return {
-        id: typeof x.id === "string" ? x.id : uid(),
+        // 번호표(id)가 없으면 주소로 항상 같은 번호표를 만들어서, 기기마다 달라지지 않게 함
+        id: typeof x.id === "string" && x.id ? x.id : "u_" + (p.contentId ? p.platform + ":" + p.contentId : p.url),
         url: p.url, platform: p.platform, contentId: p.contentId,
         title: String(x.title || "").slice(0, 60) || defaultTitle(p),
         thumbnail: /^https:\/\//.test(x.thumbnail || "") ? String(x.thumbnail).slice(0, 500) : "",
@@ -771,61 +772,104 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
     return "연결에 실패했어요. 인터넷 연결을 확인해 주세요.";
   }
 
+  /* 기기끼리 덮어쓰지 않게 하기
+     - base: 이 기기가 마지막으로 깃허브와 맞춰 본 목록
+     - 저장할 때마다 깃허브의 최신 목록을 먼저 받아, 이 기기에서 "바꾼 것만"(추가·삭제·수정) 그 위에 얹어서 저장해요.
+       그래서 다른 기기에서 넣은 작품이 사라지지 않아요. */
+  const BASE_KEY = "webtoon-board-base";
+  let base = null;
+  try { const b = localStorage.getItem(BASE_KEY); if (b) base = clean(JSON.parse(b)); } catch(e){}
+  const setBase = list => { base = list.map(x => ({ ...x })); try { localStorage.setItem(BASE_KEY, JSON.stringify(base)); } catch(e){} };
+  const idOf = it => it.id;
+  function mergeOnto(remote, local, baseList) {
+    const out = remote.map(x => ({ ...x }));
+    const pos = new Map(out.map((x, i) => [idOf(x), i]));
+    const remoteKeys = new Set(out.map(keyOf));
+    if (!baseList) {
+      // 맞춰 본 기록이 없으면 안전하게: 이 기기에만 있는 작품을 더하기만 함 (지우거나 고치지 않음)
+      for (const it of local) if (!pos.has(idOf(it)) && !remoteKeys.has(keyOf(it))) out.push({ ...it });
+      return out;
+    }
+    const bmap = new Map(baseList.map(x => [idOf(x), x]));
+    const lmap = new Map(local.map(x => [idOf(x), x]));
+    const removed = new Set();
+    for (const [id] of bmap) if (!lmap.has(id)) removed.add(id);                 // 이 기기에서 지운 것
+    for (const it of local) {
+      const b = bmap.get(idOf(it));
+      if (!b) { if (!pos.has(idOf(it)) && !remoteKeys.has(keyOf(it))) { out.push({ ...it }); pos.set(idOf(it), out.length - 1); } } // 이 기기에서 추가
+      else if (JSON.stringify(b) !== JSON.stringify(it) && pos.has(idOf(it))) out[pos.get(idOf(it))] = { ...it };          // 이 기기에서 고친 것
+    }
+    return out.filter(x => !removed.has(idOf(x)));
+  }
+  async function ghGetRemote() {
+    const r = await ghReq("GET");
+    if (r.status === 404) return { sha: null, items: [] };
+    if (!r.ok) { const e = new Error("http"); e.status = r.status; throw e; }
+    const j = await r.json();
+    const data = JSON.parse(b64d(j.content || "") || "{}");
+    return { sha: j.sha, items: clean(Array.isArray(data.items) ? data.items : []) };
+  }
+  function applyItems(next) {
+    const same = JSON.stringify(next) === JSON.stringify(items);
+    items = next;
+    try { localStorage.setItem(LS_KEY, JSON.stringify(items)); } catch(e){}
+    if (!same && $("sheet").hidden) render();
+  }
+
   // 불러오기: merge=true면 처음 연결할 때처럼 기기 목록과 합침
   async function ghPull(merge) {
     if (!gh) return false;
     if (ghDirty || ghBusy) { ghPush(); return true; }
     ghSet("불러오는 중");
     try {
-      const r = await ghReq("GET");
-      if (r.status === 404) {
-        // 파일이 아직 없으면 새로 만듦 (보관함 자체가 없으면 저장 단계에서 알려줌)
-        ghSha = null; ghDirty = true; await ghPush(); return !!gh && ghSha !== null;
-      }
-      if (!r.ok) { ghSet(ghFail(r.status), true); return false; }
-      const j = await r.json();
-      ghSha = j.sha;
-      const data = JSON.parse(b64d(j.content || ""));
-      const remote = clean(Array.isArray(data.items) ? data.items : []);
+      const rem = await ghGetRemote();
+      ghSha = rem.sha;
       if (merge) {
-        const seen = new Set(remote.map(keyOf));
-        const extra = items.filter(x => !seen.has(keyOf(x)));
-        items = remote.concat(extra);
-        try { localStorage.setItem(LS_KEY, JSON.stringify(items)); } catch(e){}
-        if (extra.length) { ghDirty = true; ghPush(); }
+        const merged = mergeOnto(rem.items, items, null);
+        applyItems(merged);
+        if (merged.length !== rem.items.length || rem.sha === null) { ghDirty = true; await ghPush(); return !!gh && ghSha !== null; }
+        setBase(rem.items);
       } else {
-        const same = JSON.stringify(remote) === JSON.stringify(items);
-        items = remote;
-        try { localStorage.setItem(LS_KEY, JSON.stringify(items)); } catch(e){}
-        if (same) merge = "same";
+        applyItems(rem.items); setBase(rem.items);
       }
       ghLastPull = Date.now();
-      if ($("sheet").hidden && merge !== "same") render();
       ghSet(`연결됨 · ${nowClock()}에 불러옴`);
       loadMeta();
       return true;
-    } catch (e) { ghSet(ghFail(0), true); return false; }
+    } catch (e) { ghSet(ghFail(e.status || 0), true); return false; }
   }
 
   async function ghPush() {
     if (!gh || ghBusy || !ghDirty) return;
     ghBusy = true; ghDirty = false;
     ghSet("저장하는 중");
-    const body = {
-      message: "목록 저장 " + new Date().toISOString(),
-      content: b64e(JSON.stringify({ app: "webtoon-board", version: 3, updatedAt: new Date().toISOString(), items }, null, 2))
-    };
-    if (ghSha) body.sha = ghSha;
     try {
-      let r = await ghReq("PUT", body);
-      if (r.status === 409 || r.status === 422) {
-        // 다른 기기에서 먼저 저장한 경우: 최신 표시만 받아 와서 지금 목록으로 덮어씀
-        const g = await ghReq("GET");
-        if (g.ok) { ghSha = (await g.json()).sha; body.sha = ghSha; r = await ghReq("PUT", body); }
+      let done = false;
+      for (let tries = 0; tries < 3 && !done; tries++) {
+        const rem = await ghGetRemote();                       // 항상 최신 목록을 먼저 받고
+        const local = items.map(x => ({ ...x }));
+        const merged = mergeOnto(rem.items, local, base);      // 이 기기에서 바꾼 것만 얹음
+        const body = {
+          message: "목록 저장 " + new Date().toISOString(),
+          content: b64e(JSON.stringify({ app: "webtoon-board", version: 3, updatedAt: new Date().toISOString(), items: merged }, null, 2))
+        };
+        if (rem.sha) body.sha = rem.sha;
+        const r = await ghReq("PUT", body);
+        if (r.status === 409 || r.status === 422) continue;     // 그 사이 다른 기기가 저장했으면 다시
+        if (!r.ok) { ghSet(ghFail(r.status), true); if (r.status >= 500) ghDirty = true; break; }
+        ghSha = (await r.json()).content.sha;
+        setBase(merged);
+        // 저장하는 동안 더 바뀐 게 없으면 합친 목록을 화면에 반영
+        if (JSON.stringify(items) === JSON.stringify(local)) applyItems(merged); else ghDirty = true;
+        ghLastPull = Date.now();
+        ghSet(`저장됨 · ${nowClock()}`); scheduleMetaPoll();
+        done = true;
       }
-      if (r.ok) { ghSha = (await r.json()).content.sha; ghSet(`저장됨 · ${nowClock()}`); scheduleMetaPoll(); }
-      else { ghSet(ghFail(r.status), true); if (r.status >= 500) ghDirty = true; }
-    } catch (e) { ghSet("인터넷이 안 돼서 이 기기에만 저장했어요. 연결되면 다시 저장해요.", true); ghDirty = true; }
+      if (!done && !ghDirty && ghBusy) { ghDirty = true; }
+    } catch (e) {
+      if (e && e.status) { ghSet(ghFail(e.status), true); if (e.status >= 500) ghDirty = true; }
+      else { ghSet("인터넷이 안 돼서 이 기기에만 저장했어요. 연결되면 다시 저장해요.", true); ghDirty = true; }
+    }
     ghBusy = false;
     if (ghDirty && navigator.onLine !== false) { clearTimeout(ghTimer); ghTimer = setTimeout(ghPush, 4000); }
   }
@@ -1057,19 +1101,21 @@ button.danger{color:var(--danger);border-color:var(--danger);background:transpar
   $("ghOff").addEventListener("click", () => {
     const b = $("ghOff");
     if (!b.dataset.armed) { b.dataset.armed = "1"; b.textContent = "한 번 더 누르면 끊겨요"; return; }
-    gh = null; ghSha = null; ghDirty = false;
-    try { localStorage.removeItem(GH_KEY); } catch(e){}
+    gh = null; ghSha = null; ghDirty = false; base = null;
+    try { localStorage.removeItem(GH_KEY); localStorage.removeItem(BASE_KEY); } catch(e){}
     ghShow();
   });
   // 불러오기는 켤 때 한 번. 다만 앱을 띄워 둔 채 6시간 넘게 지났다가 다시 보면 한 번 더 불러옴
   document.addEventListener("visibilitychange", () => {
     if (!gh) return;
     if (document.hidden) { if (ghDirty) { clearTimeout(ghTimer); ghPush(); } return; }
-    if (Date.now() - ghLastPull > 6 * 3600 * 1000) ghPull(false);
+    if (Date.now() - ghLastPull > 60 * 60 * 1000) ghPull(false);   // 1시간 넘게 지났으면 조용히 다시 받아옴
   });
   window.addEventListener("online", () => { if (gh && ghDirty) ghPush(); });
 
   ghShow();
+  // 저장 못 하고 앱이 닫혔던 변경이 있으면, 켤 때 (합쳐서) 저장부터 함
+  if (gh && base && JSON.stringify(base) !== JSON.stringify(items)) ghDirty = true;
   if (gh) ghPull(false);
 
   /* 내보내기 / 가져오기 */
